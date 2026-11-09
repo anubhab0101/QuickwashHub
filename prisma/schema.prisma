@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  WORKER
+  ADMIN
+}
+
+enum VehicleType {
+  CAR
+  BIKE
+}
+
+enum WorkerType {
+  PERMANENT
+  TEMP
+}
+
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  CREATED
+  PAYMENT_PENDING
+  PAID
+  ASSIGNING
+  ASSIGNED
+  WORKER_ON_THE_WAY
+  IN_PROGRESS
+  PHOTOS_UPLOADED
+  APPROVED
+  COMPLETED
+  CANCELLED
+  REJECTED_PHOTOS
+  REFUNDED
+  NO_WORKER_FOUND
+}
+
+enum PhotoType {
+  BEFORE
+  AFTER
+}
+
+enum PhotoStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AuthChallengeType {
+  VERIFY_EMAIL
+  PASSWORD_RESET
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  REFUNDED
+}
+
+enum LedgerType {
+  CREDIT
+  DEBIT
+  PAYOUT
+}
+
+model User {
+  id              String          @id @default(cuid())
+  email           String?         @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String?
+  phone           String?         @unique
+  name            String?
+  role            Role            @default(CUSTOMER)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  vehicles        Vehicle[]
+  addresses       Address[]
+  bookings        Booking[]
+  worker          Worker?
+  authSessions    AuthSession[]
+  auditLogs       AuditLog[]
+  authChallenges  AuthChallenge[]
+}
+
+model AuthChallenge {
+  id         String            @id @default(cuid())
+  email      String
+  type       AuthChallengeType
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int               @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime          @default(now())
+  userId     String?
+  user       User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, type, createdAt])
+}
+
+model Worker {
+  id         String         @id @default(cuid())
+  userId     String         @unique
+  user       User           @relation(fields: [userId], references: [id])
+  type       WorkerType     @default(PERMANENT)
+  kycStatus  KycStatus      @default(PENDING)
+  isOnline   Boolean        @default(false)
+  currentLat Float?
+  currentLng Float?
+  rating     Float          @default(5)
+  upiId      String?
+  bookings   Booking[]
+  zones      WorkerZone[]
+  ledger     WalletLedger[]
+  payouts    Payout[]
+}
+
+model Vehicle {
+  id         String      @id @default(cuid())
+  customerId String
+  customer   User        @relation(fields: [customerId], references: [id])
+  type       VehicleType
+  model      String
+  number     String
+  bookings   Booking[]
+}
+
+model Address {
+  id          String    @id @default(cuid())
+  customerId  String
+  customer    User      @relation(fields: [customerId], references: [id])
+  label       String
+  lat         Float
+  lng         Float
+  fullAddress String
+  zoneId      String?
+  zone        Zone?     @relation(fields: [zoneId], references: [id])
+  bookings    Booking[]
+}
+
+model Zone {
+  id                String       @id @default(cuid())
+  name              String
+  isActive          Boolean      @default(true)
+  baseCommissionPct Float        @default(20)
+  polygon           Json?
+  prices            ZonePrice[]
+  addresses         Address[]
+  workers           WorkerZone[]
+  bookings          Booking[]
+  campaigns         Campaign[]
+}
+
+model Service {
+  id          String      @id @default(cuid())
+  name        String
+  vehicleType VehicleType
+  durationMin Int
+  isActive    Boolean     @default(true)
+  prices      ZonePrice[]
+  bookings    Booking[]
+}
+
+model ZonePrice {
+  id                 String      @id @default(cuid())
+  zoneId             String
+  serviceId          String
+  vehicleType        VehicleType
+  price              Int
+  festivalMultiplier Float       @default(1)
+  zone               Zone        @relation(fields: [zoneId], references: [id])
+  service            Service     @relation(fields: [serviceId], references: [id])
+
+  @@unique([zoneId, serviceId, vehicleType])
+}
+
+model WorkerZone {
+  workerId String
+  zoneId   String
+  worker   Worker @relation(fields: [workerId], references: [id])
+  zone     Zone   @relation(fields: [zoneId], references: [id])
+
+  @@id([workerId, zoneId])
+}
+
+model Booking {
+  id            String         @id @default(cuid())
+  customerId    String
+  workerId      String?
+  zoneId        String
+  vehicleId     String
+  addressId     String
+  serviceId     String
+  scheduledAt   DateTime
+  status        BookingStatus  @default(CREATED)
+  price         Int
+  commissionAmt Int
+  workerEarning Int
+  startOtpHash  String?
+  createdAt     DateTime       @default(now())
+  customer      User           @relation(fields: [customerId], references: [id])
+  worker        Worker?        @relation(fields: [workerId], references: [id])
+  zone          Zone           @relation(fields: [zoneId], references: [id])
+  vehicle       Vehicle        @relation(fields: [vehicleId], references: [id])
+  address       Address        @relation(fields: [addressId], references: [id])
+  service       Service        @relation(fields: [serviceId], references: [id])
+  photos        BookingPhoto[]
+  payment       Payment?
+  rating        Rating?
+  walletEntries WalletLedger[]
+}
+
+model BookingPhoto {
+  id         String      @id @default(cuid())
+  bookingId  String
+  type       PhotoType
+  url        String
+  status     PhotoStatus @default(PENDING)
+  capturedAt DateTime?
+  lat        Float?
+  lng        Float?
+  booking    Booking     @relation(fields: [bookingId], references: [id])
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  bookingId  String        @unique
+  amount     Int
+  method     String
+  gatewayRef String?       @unique
+  status     PaymentStatus @default(PENDING)
+  booking    Booking       @relation(fields: [bookingId], references: [id])
+}
+
+model WalletLedger {
+  id           String     @id @default(cuid())
+  workerId     String
+  bookingId    String?
+  type         LedgerType
+  amount       Int
+  balanceAfter Int
+  createdAt    DateTime   @default(now())
+  worker       Worker     @relation(fields: [workerId], references: [id])
+  booking      Booking?   @relation(fields: [bookingId], references: [id])
+
+  @@unique([workerId, bookingId, type])
+}
+
+model Payout {
+  id       String    @id @default(cuid())
+  workerId String
+  amount   Int
+  utr      String?
+  status   String    @default("PENDING")
+  paidAt   DateTime?
+  worker   Worker    @relation(fields: [workerId], references: [id])
+}
+
+model Campaign {
+  id                String   @id @default(cuid())
+  name              String
+  zoneId            String
+  startDate         DateTime
+  endDate           DateTime
+  surgePct          Float    @default(0)
+  tempWorkersNeeded Int      @default(0)
+  zone              Zone     @relation(fields: [zoneId], references: [id])
+}
+
+model Rating {
+  id        String  @id @default(cuid())
+  bookingId String  @unique
+  stars     Int
+  comment   String?
+  booking   Booking @relation(fields: [bookingId], references: [id])
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  admin     User     @relation(fields: [adminId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
