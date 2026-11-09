@@ -20,7 +20,7 @@ if (!connectionString) throw new Error('DATABASE_URL is required.');
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString, max: Math.max(2, Number(process.env.DB_POOL_MAX) || 10), connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 }) });
 const port = Number(process.env.PORT || 4000);
 const production = process.env.NODE_ENV === 'production';
-const sessionCookie = 'rinse_session';
+const sessionCookie = 'quickwashhub_session';
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const scrypt = promisify(scryptCb);
 const signingSecret = process.env.AUTH_TOKEN_SECRET || '';
@@ -86,7 +86,7 @@ app.get('/health', async function (_req, res) {
   try { await db.$queryRaw`SELECT 1`; res.json({ status: 'ok', checks: { database: 'ok' } }); }
   catch { res.status(503).json({ status: 'error', checks: { database: 'unavailable' } }); }
 });
-app.get('/api/v1', function (_req, res) { res.json({ name: 'Rinse Car & Bike Wash API', version: 'v1' }); });
+app.get('/api/v1', function (_req, res) { res.json({ name: 'QuickWashHub Car & Bike Wash API', version: 'v1' }); });
 app.get('/api/v1/auth/config', function (_req, res) { res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null }); });
 
 const emailBody = z.string().trim().email().max(254).transform(function (x) { return x.toLowerCase(); });
@@ -131,7 +131,7 @@ app.post('/api/v1/auth/register', challengeLimiter, async function (req, res) {
     const code = String(randomInt(0, 1000000)).padStart(6, '0');
     await db.authChallenge.deleteMany({ where: { email: p.data.email, type: 'VERIFY_EMAIL' } });
     await db.authChallenge.create({ data: { email: p.data.email, userId: user.id, type: 'VERIFY_EMAIL', codeHash: challengeHash(p.data.email, 'VERIFY_EMAIL', code), expiresAt: new Date(Date.now() + 15 * 60 * 1000) } });
-    await sendEmail(p.data.email, 'Verify your Rinse account', 'Your Rinse verification code is ' + code + '. It expires in 15 minutes.');
+    await sendEmail(p.data.email, 'Verify your QuickWashHub account', 'Your QuickWashHub verification code is ' + code + '. It expires in 15 minutes.');
     res.status(202).json({ message: 'Check your email for a verification code.' });
   } catch (error) { console.error('Registration email delivery failed', error); res.status(503).json({ error: 'Could not create the account or send verification email. Try again shortly.' }); }
 });
@@ -163,7 +163,7 @@ app.post('/api/v1/auth/password-reset/request', challengeLimiter, async function
     const code = String(randomInt(0, 1000000)).padStart(6, '0');
     await db.authChallenge.deleteMany({ where: { email: p.data.email, type: 'PASSWORD_RESET' } });
     await db.authChallenge.create({ data: { email: p.data.email, userId: user.id, type: 'PASSWORD_RESET', codeHash: challengeHash(p.data.email, 'PASSWORD_RESET', code), expiresAt: new Date(Date.now() + 15 * 60 * 1000) } });
-    await sendEmail(p.data.email, 'Reset your Rinse password', 'Your password reset code is ' + code + '. It expires in 15 minutes.');
+    await sendEmail(p.data.email, 'Reset your QuickWashHub password', 'Your password reset code is ' + code + '. It expires in 15 minutes.');
   } catch (error) { console.error('Password reset email failed', error); }
   res.status(202).json({ message: 'If the account exists, reset instructions will be emailed.' });
 });
@@ -464,7 +464,7 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 app.use(express.static(path.join(process.cwd(), 'public')));
 app.get('*path', function (_req, res) { res.sendFile(path.join(process.cwd(), 'public', 'index.html')); });
 app.use(function (_req, res) { res.status(404).json({ error: 'Not found.' }); });
-const server = app.listen(port, '0.0.0.0', function () { console.log('Rinse website and API listening on port ' + port); });
+const server = app.listen(port, '0.0.0.0', function () { console.log('QuickWashHub website and API listening on port ' + port); });
 async function shutdown() { server.close(); await db.$disconnect(); process.exit(0); }
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
 

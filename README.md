@@ -1,4 +1,4 @@
-# Rinse car and bike wash platform
+# QuickWashHub car and bike wash platform
 
 A responsive booking and operations website with PostgreSQL-backed accounts and bookings. There are no demo accounts or browser-only booking records. Sign in with verified email/password or Google. Twilio is not used.
 
