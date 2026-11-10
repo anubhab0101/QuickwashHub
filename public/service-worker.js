@@ -1,8 +1,8 @@
-const CACHE_NAME = 'quickwashhub-shell-v7';
+const CACHE_NAME = 'quickwashhub-shell-v8';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/styles.css?v=7',
+  '/styles.css?v=8',
   '/app.js?v=6',
   '/manifest.webmanifest?v=4',
   '/icons/icon-192.png?v=4',
