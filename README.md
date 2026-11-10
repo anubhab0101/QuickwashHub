@@ -13,6 +13,8 @@ Requirements: Node.js 22.12+, PostgreSQL 16+, a Resend account for verification/
 5. Set `INITIAL_ADMIN_EMAIL` to your operator email and run `npm run db:bootstrap-admin` once. That account can activate using email registration/verification or Google sign-in with the same address.
 6. Run `npm run dev` and open `http://localhost:4000`.
 
+QuickWashHub is installable as a Progressive Web App in browsers that support the native install prompt. The app shell is cached for offline loading; account data, bookings, and payments still require a network connection. On a customer's first signed-in visit, the app shows a one-time install invitation. Safari on iPhone does not expose the same native install prompt, so the UI does not display manual installation steps there.
+
 The first admin creates zones, services, prices and worker accounts. Customers register, verify their email, add a vehicle/address, book a wash and pay. Workers use their provisioned email, set a password through registration, or use Google Sign-In with that email. Email accounts support verification and password reset codes. Google credentials are verified by the API before issuing a session.
 
 ## Environment

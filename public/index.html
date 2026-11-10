@@ -1,12 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f7f8f5">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0f1a14">
+  <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="QuickWashHub">
   <title>QuickWashHub — car and bike wash</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest?v=4"><link rel="icon" href="/icons/icon-192.png?v=4" type="image/png"><link rel="apple-touch-icon" href="/icons/icon-192.png?v=4">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=7">
 </head>
 <body>
-  <aside class="sidebar"><a class="brand" href="/"><b>Q</b> QuickWashHub</a><small id="menu-label">ACCOUNT</small><nav id="nav"></nav><div class="bottom"><div class="help"><b>QuickWashHub support</b><p>Need help with a booking?</p><span>Contact your service operator</span></div><div class="user" id="user"></div></div></aside>
-  <main><header><div class="crumb"><span class="mobilebrand"><b>Q</b> QuickWashHub</span><span class="desktopcrumb">QuickWashHub&nbsp; / &nbsp;<b id="crumb">Account</b></span></div><div class="right"><button class="secondary hidden" id="logout">Sign out</button></div></header><div class="content" id="content"></div><footer>QuickWashHub car & bike care <span>Bookings and account information are private to your signed-in account.</span></footer></main><div class="toast" id="toast" role="status"></div><script src="/app.js" defer></script>
+  <aside class="sidebar"><a class="brand" href="/"><b>Q</b><span>QuickWashHub</span></a><small id="menu-label">ACCOUNT</small><nav id="nav" aria-label="Main navigation"></nav><div class="bottom"><div class="help"><b>Need a hand?</b><p>Need help with a booking?</p><span>Contact your service operator.</span></div><div class="user" id="user"></div></div></aside>
+  <main class="main"><header><div class="crumb"><span class="mobilebrand"><b>Q</b> QuickWashHub</span><span class="desktopcrumb">QuickWashHub <span aria-hidden="true">/</span> <b id="crumb">Account</b></span></div><div class="right"><button class="install-button hidden" id="install-app" type="button" aria-label="Install QuickWashHub">Install app</button><button class="secondary hidden" id="logout" type="button">Sign out</button></div></header><div class="content" id="content" aria-live="polite"></div><footer>QuickWashHub <span>Car &amp; bike care, at your door.</span></footer></main><nav class="mobile-nav hidden" id="mobile-nav" aria-label="Mobile navigation"></nav><div class="toast" id="toast" role="status" aria-live="polite"></div><script src="/app.js?v=6" defer></script>
 </body></html>
 
