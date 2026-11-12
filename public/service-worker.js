@@ -1,9 +1,13 @@
-const CACHE_NAME = 'quickwashhub-shell-v11';
+const CACHE_NAME = 'quickwashhub-shell-v15';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/styles.css?v=10',
-  '/app.js?v=8',
+  '/styles.css?v=12',
+  '/app.js?v=10',
+  '/admin-zones.js?v=2',
+  '/policies.html',
+  '/policies.css?v=1',
+  '/policies.js?v=1',
   '/manifest.webmanifest?v=4',
   '/icons/icon-192.png?v=4',
   '/icons/icon-512.png?v=4',
@@ -30,13 +34,14 @@ self.addEventListener('fetch', event => {
 
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
-      const cached = await caches.match('/');
+      const cached = await caches.match(request);
       const update = fetch(request).then(response => {
-        if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put('/', response.clone()));
+        if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
         return response;
       });
       if (cached) { event.waitUntil(update.catch(() => {})); return cached; }
-      return update.catch(async () => (await caches.match('/')) || Response.error());
+      const shellPage = url.pathname === '/' || url.pathname === '/index.html';
+      return update.catch(async () => shellPage ? (await caches.match('/')) || Response.error() : Response.error());
     })());
     return;
   }

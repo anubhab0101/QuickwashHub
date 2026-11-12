@@ -28,16 +28,26 @@ const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(function (x) { re
 const bucket = process.env.S3_BUCKET || '';
 const s3 = process.env.S3_ENDPOINT && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY ? new S3Client({ region: process.env.S3_REGION || 'auto', endpoint: process.env.S3_ENDPOINT, forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true', credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY } }) : null;
 if (signingSecret.length < 32 || signingSecret.startsWith('replace_')) throw new Error('Set AUTH_TOKEN_SECRET to a unique random secret with at least 32 characters.');
-if (production && (!process.env.CORS_ORIGIN || !process.env.RESEND_API_KEY || !process.env.EMAIL_FROM || !process.env.GOOGLE_CLIENT_ID || !process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || !process.env.RAZORPAY_WEBHOOK_SECRET || !s3 || !bucket)) throw new Error('Production requires exact CORS origin, email delivery, Google OAuth, Razorpay and private object storage credentials.');
+const cashfreeId = process.env.CASHFREE_CLIENT_ID || '';
+const cashfreeSecret = process.env.CASHFREE_CLIENT_SECRET || '';
+const cashfreeEnv = process.env.CASHFREE_ENV === 'production' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
+const cashfreeVersion = process.env.CASHFREE_API_VERSION || '2026-01-01';
+const easySplitEnabled = process.env.CASHFREE_EASY_SPLIT_ENABLED === 'true';
+const pilotZoneIds = (process.env.PILOT_ZONE_IDS || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+const pilotZoneWhere = production || pilotZoneIds.length ? { id: { in: pilotZoneIds } } : {};
+const publicPaymentsReady = production && process.env.PUBLIC_BOOKINGS_ENABLED === 'true' && process.env.CASHFREE_ENV === 'production' && !!cashfreeId && !!cashfreeSecret && easySplitEnabled && !!s3 && !!bucket && !!process.env.GOOGLE_MAPS_API_KEY && pilotZoneIds.length > 0 && process.env.LEGAL_REVIEW_APPROVED === 'true' && !!process.env.BUSINESS_LEGAL_NAME && !!process.env.BUSINESS_ADDRESS && !!process.env.GRIEVANCE_OFFICER && !!process.env.GRIEVANCE_EMAIL && !!process.env.GRIEVANCE_PHONE;
+if (production && (!process.env.CORS_ORIGIN || !process.env.RESEND_API_KEY || !process.env.EMAIL_FROM || !process.env.GOOGLE_CLIENT_ID || !s3 || !bucket)) throw new Error('Production requires exact CORS origin, email delivery, Google OAuth and private object storage credentials. Payments remain disabled until all beta launch gates are completed.');
 if (production && allowedOrigins.some(function (origin) { return origin === '*' || new URL(origin).protocol !== 'https:'; })) throw new Error('Production CORS origins must be exact HTTPS origins.');
 const storageOrigin = process.env.S3_ENDPOINT ? new URL(process.env.S3_ENDPOINT).origin : '';
 
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
-app.use(helmet({ crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://checkout.razorpay.com', 'https://accounts.google.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com'], styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'], fontSrc: ["'self'", 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:', storageOrigin, 'https://*.googleusercontent.com', 'https://*.googleapis.com', 'https://*.gstatic.com'].filter(Boolean), connectSrc: ["'self'", 'https://api.razorpay.com', 'https://accounts.google.com', 'https://oauth2.googleapis.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com', storageOrigin].filter(Boolean), frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com', 'https://accounts.google.com'], objectSrc: ["'none'"], baseUri: ["'self'"] } } }));
+app.use(helmet({ crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://sdk.cashfree.com', 'https://accounts.google.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com'], styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'], fontSrc: ["'self'", 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:', storageOrigin, 'https://*.googleusercontent.com', 'https://*.googleapis.com', 'https://*.gstatic.com'].filter(Boolean), connectSrc: ["'self'", 'https://api.cashfree.com', 'https://sandbox.cashfree.com', 'https://accounts.google.com', 'https://oauth2.googleapis.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com', storageOrigin].filter(Boolean), frameSrc: ["'self'", 'https://sdk.cashfree.com', 'https://payments.cashfree.com', 'https://accounts.google.com'], objectSrc: ["'none'"], baseUri: ["'self'"] } } }));
 if (allowedOrigins.length) app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use('/api/v1/payments/razorpay/webhook', express.raw({ type: 'application/json', limit: '2mb' }));
+app.use('/api/v1/payments/cashfree/webhook', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '1mb' }));
+app.use('/api/v1', function (req, res, next) { res.setHeader('Cache-Control', 'private, no-store'); const started = Date.now(); res.on('finish', function () { const safePath = req.path.replace(/\/[a-z0-9_-]{20,}/gi, '/:id'); const durationMs = Date.now() - started; console.info('api.request', JSON.stringify({ method: req.method, path: safePath, status: res.statusCode, durationMs })); }); next(); });
 
 function getCookie(req: Request): string | undefined {
   const item = (req.headers.cookie || '').split(';').map(function (x) { return x.trim(); }).find(function (x) { return x.startsWith(sessionCookie + '='); });
@@ -87,6 +97,7 @@ app.get('/health', async function (_req, res) {
 });
 app.get('/api/v1', function (_req, res) { res.json({ name: 'QuickWashHub Car & Bike Wash API', version: 'v1' }); });
 app.get('/api/v1/auth/config', function (_req, res) { res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null }); });
+app.get('/api/v1/public/business-info', function (_req, res) { res.setHeader('Cache-Control', 'public, max-age=300'); res.json({ legalName: process.env.BUSINESS_LEGAL_NAME || 'QuickWashHub', address: process.env.BUSINESS_ADDRESS || 'To be provided before launch', grievanceOfficer: process.env.GRIEVANCE_OFFICER || 'Grievance Officer', grievanceEmail: process.env.GRIEVANCE_EMAIL || '', grievancePhone: process.env.GRIEVANCE_PHONE || '', legalReviewApproved: process.env.LEGAL_REVIEW_APPROVED === 'true', betaArea: '42 Mouza, Cuttack, Odisha' }); });
 
 const emailBody = z.string().trim().email().max(254).transform(function (x) { return x.toLowerCase(); });
 const passwordBody = z.string().min(10).max(128);
@@ -198,22 +209,48 @@ app.post('/api/v1/auth/logout', async function (req, res) {
   res.clearCookie(sessionCookie, { httpOnly: true, secure: production, sameSite: 'strict', path: '/' });
   res.status(204).end();
 });
-app.get('/api/v1/me', authenticated(), function (_req, res) { const u = res.locals.user; res.json({ id: u.id, name: u.name, email: u.email, role: u.role }); });
-app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_req, res) {
-  const userId = res.locals.user.id;
-  const [vehicles, addresses, prices] = await Promise.all([
+async function customerSnapshot(userId: string, user: { id: string; name: string | null; role: Role }) {
+  const serviceZoneFilter = { isActive: true, ...pilotZoneWhere };
+  const [vehicles, addresses, prices, solarServices, homeServices, zones, rows] = await Promise.all([
     db.vehicle.findMany({ where: { customerId: userId }, orderBy: { model: 'asc' } }),
     db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
-    db.zonePrice.findMany({ where: { zone: { isActive: true }, service: { isActive: true } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } })
+    db.zonePrice.findMany({ where: { zone: serviceZoneFilter, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
+    db.service.findMany({ where: { category: 'SOLAR', isActive: true } }),
+    db.service.findMany({ where: { category: 'HOME' } }),
+    db.zone.findMany({ where: serviceZoneFilter, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true } }),
+    db.booking.findMany({ where: { customerId: userId }, include: { service: true, vehicle: true, worker: { include: { user: { select: { name: true } } } }, zone: true, rating: true, photos: { select: { id: true, type: true, status: true } } }, orderBy: { createdAt: 'desc' }, take: 100 })
   ]);
-  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, services: prices.map(function (p) { return { id: p.serviceId, name: p.service.name, vehicleType: p.vehicleType, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name }; }), googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null });
+  return {
+    catalog: { user: { id: user.id, name: user.name, role: user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: true }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null },
+    bookings: rows.map(function (b) { return { id: b.id, status: b.status, service: b.service.name, vehicle: b.vehicle ? b.vehicle.model + ' · ' + b.vehicle.number : b.solarPropertyType ? b.solarPropertyType + ' solar panels (' + (b.solarPanelCount || 'quantity TBD') + ')' : '', solarPropertyType: b.solarPropertyType, solarPanelCount: b.solarPanelCount, solarRoofType: b.solarRoofType, solarAccessNotes: b.solarAccessNotes, quoteNote: b.quoteNote, scheduledAt: b.scheduledAt, price: b.price, worker: b.worker?.user.name || null, zone: b.zone.name, photos: b.photos, rating: b.rating }; })
+  };
+}
+app.get('/api/v1/me', authenticated(), async function (_req, res) {
+  const u = res.locals.user;
+  const base = { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role };
+  res.setHeader('Cache-Control', 'private, no-store');
+  if (u.role === Role.CUSTOMER) return res.json({ ...base, customerSnapshot: await customerSnapshot(u.id, u) });
+  res.json(base);
+});
+app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_req, res) {
+  const userId = res.locals.user.id;
+  const [vehicles, addresses, prices, solarServices, homeServices, zones] = await Promise.all([
+    db.vehicle.findMany({ where: { customerId: userId }, orderBy: { model: 'asc' } }),
+    db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
+    db.zonePrice.findMany({ where: { zone: { isActive: true, ...pilotZoneWhere }, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
+    db.service.findMany({ where: { category: 'SOLAR', isActive: true } }),
+    db.service.findMany({ where: { category: 'HOME' } }),
+    db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true } })
+  ]);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: true }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null });
 });
 
 app.get('/api/v1/services', authenticated(), async function (req, res) {
   const zoneId = typeof req.query.zoneId === 'string' ? req.query.zoneId : undefined;
   const vehicleType = z.nativeEnum(VehicleType).safeParse(req.query.vehicleType);
   if (!vehicleType.success) return res.status(400).json({ error: 'vehicleType must be CAR or BIKE.' });
-  const items = await db.zonePrice.findMany({ where: { ...(zoneId ? { zoneId } : {}), vehicleType: vehicleType.data, zone: { isActive: true }, service: { isActive: true } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } });
+  const items = await db.zonePrice.findMany({ where: { ...(zoneId ? { zoneId } : pilotZoneWhere), vehicleType: vehicleType.data, zone: { isActive: true, ...pilotZoneWhere }, service: { isActive: true } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } });
   res.json(items.map(function (p) { return { id: p.serviceId, name: p.service.name, vehicleType: p.vehicleType, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name }; }));
 });
 app.get('/api/v1/vehicles', customer, async function (_req, res) { res.json(await db.vehicle.findMany({ where: { customerId: res.locals.user.id } })); });
@@ -222,47 +259,143 @@ app.post('/api/v1/vehicles', customer, async function (req, res) { const p = veh
 app.delete('/api/v1/vehicles/:id', customer, async function (req, res) { const result = await db.vehicle.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: { status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.REFUNDED] } } } } }); if (!result.count) return res.status(409).json({ error: 'Vehicle not found or linked to an active booking.' }); res.status(204).end(); });
 
 function contains(lng: number, lat: number, ring: number[][]) { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[1] > lat) !== (b[1] > lat) && lng < (b[0] - a[0]) * (lat - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside; } return inside; }
-async function zoneAt(lng: number, lat: number) { const zones = await db.zone.findMany({ where: { isActive: true } }); return zones.find(function (zone) { const g = zone.polygon as any; const polygons: number[][][][] = g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : []; return polygons.some(function (rings) { return !!rings[0] && contains(lng, lat, rings[0]) && !rings.slice(1).some(function (hole) { return contains(lng, lat, hole); }); }); }); }
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) { const toRad = function (d: number) { return d * Math.PI / 180; }; const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1); const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2; return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
+async function zoneAt(lng: number, lat: number) {
+  const zones = await db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere } });
+  return zones.find(function (zone) {
+    if (zone.centerLat != null && zone.centerLng != null && zone.radiusKm != null) return distanceKm(lat, lng, zone.centerLat, zone.centerLng) <= zone.radiusKm;
+    const g = zone.polygon as any; const polygons: number[][][][] = g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : [];
+    return polygons.some(function (rings) { return !!rings[0] && contains(lng, lat, rings[0]) && !rings.slice(1).some(function (hole) { return contains(lng, lat, hole); }); });
+  });
+}
 const addressInput = z.object({ label: z.string().trim().min(1).max(50), lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), fullAddress: z.string().trim().min(5).max(300) });
 app.get('/api/v1/addresses', customer, async function (_req, res) { res.json(await db.address.findMany({ where: { customerId: res.locals.user.id }, include: { zone: true } })); });
 app.post('/api/v1/addresses', customer, async function (req, res) { const p = addressInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Enter a valid address and map location.' }); const zone = await zoneAt(p.data.lng, p.data.lat); if (!zone) return res.status(422).json({ error: 'Service is unavailable at this location.' }); res.status(201).json(await db.address.create({ data: { ...p.data, customerId: res.locals.user.id, zoneId: zone.id }, include: { zone: true } })); });
 app.delete('/api/v1/addresses/:id', customer, async function (req, res) { const result = await db.address.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: { status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.REFUNDED] } } } } }); if (!result.count) return res.status(409).json({ error: 'Address not found or linked to an active booking.' }); res.status(204).end(); });
-
-const bookingInput = z.object({ vehicleId: z.string().min(1), addressId: z.string().min(1), serviceId: z.string().min(1), scheduledAt: z.string().datetime() });
-app.get('/api/v1/bookings', customer, async function (req, res) { const status = typeof req.query.status === 'string' && Object.values(BookingStatus).includes(req.query.status as BookingStatus) ? req.query.status as BookingStatus : undefined; const rows = await db.booking.findMany({ where: { customerId: res.locals.user.id, ...(status ? { status } : {}) }, include: { service: true, vehicle: true, worker: { include: { user: true } }, zone: true, rating: true, photos: { select: { id: true, type: true, status: true } } }, orderBy: { createdAt: 'desc' } }); res.json(rows.map(function (b) { return { id: b.id, status: b.status, service: b.service.name, vehicle: b.vehicle.model + ' · ' + b.vehicle.number, scheduledAt: b.scheduledAt, price: b.price, worker: b.worker?.user.name || null, zone: b.zone.name, photos: b.photos, rating: b.rating }; })); });
-app.post('/api/v1/bookings', customer, async function (req, res) {
-  const p = bookingInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Check booking details.' }); const userId = res.locals.user.id;
-  const [vehicle, address] = await Promise.all([db.vehicle.findFirst({ where: { id: p.data.vehicleId, customerId: userId } }), db.address.findFirst({ where: { id: p.data.addressId, customerId: userId, zone: { isActive: true } } })]);
-  if (!vehicle || !address?.zoneId) return res.status(400).json({ error: 'Selected vehicle or service address is invalid.' });
-  if (new Date(p.data.scheduledAt).getTime() < Date.now() + 60 * 60 * 1000) return res.status(400).json({ error: 'Choose a time at least one hour from now.' });
-  const price = await db.zonePrice.findFirst({ where: { serviceId: p.data.serviceId, vehicleType: vehicle.type, zoneId: address.zoneId, zone: { isActive: true }, service: { isActive: true } }, include: { zone: true } });
-  if (!price) return res.status(422).json({ error: 'Service is unavailable for this vehicle and area.' });
-  const commission = Math.round(price.price * price.zone.baseCommissionPct / 100);
-  const booking = await db.booking.create({ data: { customerId: userId, zoneId: address.zoneId, vehicleId: vehicle.id, addressId: address.id, serviceId: price.serviceId, scheduledAt: new Date(p.data.scheduledAt), status: BookingStatus.CREATED, price: price.price, commissionAmt: commission, workerEarning: price.price - commission }, include: { service: true, zone: true } });
-  res.status(201).json({ id: booking.id, status: booking.status, service: booking.service.name, scheduledAt: booking.scheduledAt, price: booking.price, zone: booking.zone.name });
+app.post('/api/v1/support/tickets', customer, async function (req, res) {
+  const p = z.object({ bookingId: z.string().optional(), subject: z.string().trim().min(4).max(120), message: z.string().trim().min(10).max(4000) }).strict().safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Enter a subject and a message of at least 10 characters.' });
+  if (p.data.bookingId && !await db.booking.findFirst({ where: { id: p.data.bookingId, customerId: res.locals.user.id }, select: { id: true } })) return res.status(404).json({ error: 'Booking not found.' });
+  const ticket = await db.supportTicket.create({ data: { reference: 'QWH-' + randomBytes(5).toString('hex').toUpperCase(), customerId: res.locals.user.id, bookingId: p.data.bookingId, subject: p.data.subject, message: p.data.message } });
+  res.status(201).json({ reference: ticket.reference, status: ticket.status, createdAt: ticket.createdAt });
 });
-app.post('/api/v1/bookings/:id/cancel', customer, async function (req, res) { const b = await db.booking.findFirst({ where: { id: String(req.params.id), customerId: res.locals.user.id } }); if (!b) return res.status(404).json({ error: 'Booking not found.' }); if (b.status !== BookingStatus.CREATED) return res.status(409).json({ error: 'Online cancellation is available only before payment starts. Contact support for changes after payment begins.' }); const result = await db.booking.updateMany({ where: { id: b.id, status: BookingStatus.CREATED }, data: { status: BookingStatus.CANCELLED } }); if (!result.count) return res.status(409).json({ error: 'Booking changed. Refresh and try again.' }); res.json({ id: b.id, status: BookingStatus.CANCELLED }); });
+app.get('/api/v1/support/tickets', customer, async function (_req, res) { res.json(await db.supportTicket.findMany({ where: { customerId: res.locals.user.id }, select: { reference: true, subject: true, status: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } })); });
+app.post('/api/v1/account/deletion-request', customer, async function (req, res) {
+  const p = z.object({ reason: z.string().trim().max(1000).optional() }).strict().safeParse(req.body || {});
+  if (!p.success) return res.status(400).json({ error: 'Request details are too long.' });
+  const existing = await db.accountDeletionRequest.findFirst({ where: { userId: res.locals.user.id, status: 'PENDING' } });
+  const request = existing || await db.accountDeletionRequest.create({ data: { userId: res.locals.user.id, reason: p.data.reason } });
+  await db.authSession.deleteMany({ where: { userId: res.locals.user.id, id: { not: res.locals.sessionId } } });
+  res.status(202).json({ status: request.status, requestedAt: request.createdAt, message: 'Your deletion request is recorded. We will contact you if records must be retained by law.' });
+});
+
+const bookingInput = z.object({
+  serviceId: z.string().min(1), scheduledAt: z.string().datetime(), fullName: z.string().trim().min(2).max(100), phone: z.string().regex(/^[6-9]\d{9}$/),
+  addressId: z.string().optional(), newAddress: addressInput.optional(), vehicleId: z.string().optional(), newVehicle: vehicleInput.optional(),
+  solarPanelCount: z.number().int().min(1).max(10000).optional(), solarRoofType: z.string().trim().min(2).max(80).optional(), solarAccessNotes: z.string().trim().max(1000).optional(), solarPropertyType: z.enum(['RESIDENTIAL', 'COMMERCIAL']).optional()
+}).strict();
+app.get('/api/v1/bookings', customer, async function (req, res) { const status = typeof req.query.status === 'string' && Object.values(BookingStatus).includes(req.query.status as BookingStatus) ? req.query.status as BookingStatus : undefined; const rows = await db.booking.findMany({ where: { customerId: res.locals.user.id, ...(status ? { status } : {}) }, include: { service: true, vehicle: true, worker: { include: { user: true } }, zone: true, rating: true, photos: { select: { id: true, type: true, status: true } } }, orderBy: { createdAt: 'desc' } }); res.setHeader('Cache-Control', 'private, no-store'); res.json(rows.map(function (b) { return { id: b.id, status: b.status, service: b.service.name, vehicle: b.vehicle ? b.vehicle.model + ' · ' + b.vehicle.number : b.solarPropertyType + ' solar panels', solarPropertyType: b.solarPropertyType, solarPanelCount: b.solarPanelCount, solarRoofType: b.solarRoofType, solarAccessNotes: b.solarAccessNotes, quoteNote: b.quoteNote, scheduledAt: b.scheduledAt, price: b.price, worker: b.worker?.user.name || null, zone: b.zone.name, photos: b.photos, rating: b.rating }; })); });
+app.post('/api/v1/bookings', customer, async function (req, res) {
+  const p = bookingInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Enter your name, valid mobile number, service address, and requested service details.' }); const userId = res.locals.user.id;
+  if (production && !pilotZoneIds.length) return res.status(503).json({ error: 'Bookings are closed until the approved 42 Mouza map zones are configured.' });
+  const phoneOwner = await db.user.findUnique({ where: { phone: p.data.phone }, select: { id: true } });
+  if (phoneOwner && phoneOwner.id !== userId) return res.status(409).json({ error: 'This mobile number is linked to another account. Sign in with that account or contact support.' });
+  const service = await db.service.findFirst({ where: { id: p.data.serviceId, isActive: true } });
+  if (!service) return res.status(422).json({ error: 'This service is unavailable.' });
+  if (service.category === 'HOME' && process.env.HOME_WASH_ENABLED !== 'true') return res.status(422).json({ error: 'Home Wash is not available in this beta yet.' });
+  let vehicle = p.data.vehicleId ? await db.vehicle.findFirst({ where: { id: p.data.vehicleId, customerId: userId } }) : null;
+  let address = p.data.addressId ? await db.address.findFirst({ where: { id: p.data.addressId, customerId: userId, zone: { isActive: true } } }) : null;
+  if (!vehicle && p.data.newVehicle) vehicle = await db.vehicle.create({ data: { ...p.data.newVehicle, customerId: userId } });
+  if (!address && p.data.newAddress) {
+    const zone = await zoneAt(p.data.newAddress.lng, p.data.newAddress.lat);
+    if (zone) address = await db.address.create({ data: { ...p.data.newAddress, customerId: userId, zoneId: zone.id }, include: { zone: true } });
+  }
+  if (!address?.zoneId) return res.status(422).json({ error: 'Choose an address inside a mapped QuickWashHub service zone.' });
+  if (pilotZoneIds.length && !pilotZoneIds.includes(address.zoneId)) return res.status(422).json({ error: 'This beta currently serves Cuttack 42 Mouza only.' });
+  if (new Date(p.data.scheduledAt).getTime() < Date.now() + 60 * 60 * 1000) return res.status(400).json({ error: 'Choose a time at least one hour from now.' });
+  if (service.category === 'VEHICLE' && (!vehicle || !service.vehicleType || service.vehicleType !== vehicle.type)) return res.status(400).json({ error: 'Choose a saved vehicle matching this service, or add its model and registration.' });
+  if (service.category === 'SOLAR' && (!p.data.solarRoofType || !p.data.solarPropertyType)) return res.status(400).json({ error: 'Solar quote requests need the property type and roof/access details.' });
+  let price = null;
+  if (service.category === 'VEHICLE') price = await db.zonePrice.findFirst({ where: { serviceId: service.id, vehicleType: vehicle!.type, solarPanelTier: null, zoneId: address.zoneId, zone: { isActive: true }, service: { isActive: true } }, include: { zone: true } });
+  if (service.category === 'VEHICLE' && !price) return res.status(422).json({ error: 'Service is unavailable for this vehicle and area.' });
+  const quoteRequested = service.category === 'SOLAR';
+  const amount = price?.price || 0;
+  const commission = price ? Math.round(price.price * price.zone.baseCommissionPct / 100) : 0;
+  const updatedUser = await db.user.update({ where: { id: userId }, data: { name: p.data.fullName, phone: p.data.phone } });
+  const booking = await db.booking.create({ data: { customerId: userId, zoneId: address.zoneId, vehicleId: vehicle?.id, addressId: address.id, serviceId: service.id, scheduledAt: new Date(p.data.scheduledAt), status: quoteRequested ? BookingStatus.QUOTE_REQUESTED : BookingStatus.CREATED, price: amount, commissionAmt: commission, workerEarning: amount - commission, solarPanelCount: p.data.solarPanelCount, solarRoofType: p.data.solarRoofType, solarAccessNotes: p.data.solarAccessNotes, solarPropertyType: p.data.solarPropertyType }, include: { service: true, zone: true } });
+  res.status(201).json({ id: booking.id, status: booking.status, service: booking.service.name, scheduledAt: booking.scheduledAt, price: booking.price, zone: booking.zone.name, customerName: updatedUser.name });
+});
+app.post('/api/v1/bookings/:id/cancel', customer, async function (req, res) { const b = await db.booking.findFirst({ where: { id: String(req.params.id), customerId: res.locals.user.id } }); if (!b) return res.status(404).json({ error: 'Booking not found.' }); const unpaid = [BookingStatus.CREATED, BookingStatus.QUOTE_REQUESTED, BookingStatus.QUOTE_PROVIDED] as BookingStatus[]; if (!unpaid.includes(b.status)) return res.status(409).json({ error: 'Contact support for cancellation after payment begins.' }); const result = await db.booking.updateMany({ where: { id: b.id, status: b.status }, data: { status: BookingStatus.CANCELLED } }); if (!result.count) return res.status(409).json({ error: 'Booking changed. Refresh and try again.' }); res.json({ id: b.id, status: BookingStatus.CANCELLED }); });
 app.post('/api/v1/bookings/:id/rating', customer, async function (req, res) { const p = z.object({ stars: z.number().int().min(1).max(5), comment: z.string().trim().max(1000).optional() }).safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a rating from one to five stars.' }); const booking = await db.booking.findFirst({ where: { id: String(req.params.id), customerId: res.locals.user.id }, include: { worker: true } }); if (!booking || booking.status !== BookingStatus.COMPLETED) return res.status(409).json({ error: 'Only completed bookings can be rated.' }); try { const rating = await db.rating.create({ data: { bookingId: booking.id, stars: p.data.stars, comment: p.data.comment } }); if (booking.workerId) { const ratings = await db.rating.findMany({ where: { booking: { workerId: booking.workerId } }, select: { stars: true } }); await db.worker.update({ where: { id: booking.workerId }, data: { rating: ratings.reduce(function (n, x) { return n + x.stars; }, 0) / ratings.length } }); } res.status(201).json(rating); } catch { res.status(409).json({ error: 'A rating already exists for this booking.' }); } });
 
 app.post('/api/v1/bookings/:id/payment-order', customer, async function (req, res) {
   const b = await db.booking.findFirst({ where: { id: String(req.params.id), customerId: res.locals.user.id } });
   if (!b) return res.status(404).json({ error: 'Booking not found.' });
-  if (b.status !== BookingStatus.CREATED && b.status !== BookingStatus.PAYMENT_PENDING) return res.status(409).json({ error: 'Booking is not payable.' });
-  const key = process.env.RAZORPAY_KEY_ID, secret = process.env.RAZORPAY_KEY_SECRET;
-  if (!key || !secret) return res.status(503).json({ error: 'Online payments are not configured.' });
+  if (!([BookingStatus.CREATED, BookingStatus.QUOTE_PROVIDED, BookingStatus.PAYMENT_PENDING] as BookingStatus[]).includes(b.status)) return res.status(409).json({ error: 'Booking must be quoted or ready for payment before checkout.' });
+  if (b.price < 100) return res.status(409).json({ error: 'The final quote is not available yet.' });
+  if (!cashfreeId || !cashfreeSecret || (production && !publicPaymentsReady)) return res.status(503).json({ error: 'Paid bookings are not open yet. Cashfree, Easy Split, 42 Mouza, and legal launch gates must be completed.' });
   try {
     const previous = await db.payment.findUnique({ where: { bookingId: b.id } });
-    if (previous?.status === PaymentStatus.PENDING && previous.gatewayRef) return res.json({ orderId: previous.gatewayRef, amount: previous.amount, currency: 'INR', keyId: key });
-    const response = await fetch('https://api.razorpay.com/v1/orders', { method: 'POST', headers: { Authorization: 'Basic ' + Buffer.from(key + ':' + secret).toString('base64'), 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: b.price, currency: 'INR', receipt: b.id, notes: { bookingId: b.id } }) });
+    if (previous?.method === 'cashfree' && previous.status === PaymentStatus.PENDING && previous.gatewayRef && previous.paymentSessionId) return res.json({ orderId: previous.gatewayRef, paymentSessionId: previous.paymentSessionId, mode: process.env.CASHFREE_ENV === 'production' ? 'production' : 'sandbox' });
+    const customer = await db.user.findUnique({ where: { id: b.customerId }, select: { id: true, name: true, email: true, phone: true } });
+    const cashfreePhone = customer?.phone?.replace(/\D/g, '').replace(/^91(?=[6-9]\d{9}$)/, '');
+    if (!customer?.name || !cashfreePhone || !/^[6-9]\d{9}$/.test(cashfreePhone)) return res.status(409).json({ error: 'Update your name and 10-digit mobile number before paying.' });
+    const idem = createHash('sha256').update('quickwashhub-order:' + b.id).digest('hex');
+    const response = await fetch(cashfreeEnv + '/orders', { method: 'POST', headers: { 'x-client-id': cashfreeId, 'x-client-secret': cashfreeSecret, 'x-api-version': cashfreeVersion, 'x-idempotency-key': idem.slice(0, 8) + '-' + idem.slice(8, 12) + '-4' + idem.slice(13, 16) + '-a' + idem.slice(17, 20) + '-' + idem.slice(20, 32), 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: 'qwh_' + b.id, order_amount: Number((b.price / 100).toFixed(2)), order_currency: 'INR', customer_details: { customer_id: customer.id, customer_name: customer.name, ...(customer.email ? { customer_email: customer.email } : {}), customer_phone: cashfreePhone }, order_meta: { return_url: (allowedOrigins[0] || 'http://localhost:' + port) + '/?payment=return&order_id={order_id}' }, order_note: 'QuickWashHub wash booking' }) });
     if (!response.ok) throw new Error('Payment gateway rejected the order.');
-    const order = await response.json() as { id: string; amount: number; currency: string };
+    const order = await response.json() as { order_id: string; payment_session_id: string };
+    if (!order.order_id || !order.payment_session_id) throw new Error('Cashfree returned an incomplete checkout session.');
     await db.$transaction([
-      db.payment.upsert({ where: { bookingId: b.id }, create: { bookingId: b.id, amount: b.price, method: 'razorpay', gatewayRef: order.id, status: PaymentStatus.PENDING }, update: { amount: b.price, method: 'razorpay', gatewayRef: order.id, status: PaymentStatus.PENDING } }),
+      db.payment.upsert({ where: { bookingId: b.id }, create: { bookingId: b.id, amount: b.price, method: 'cashfree', gatewayRef: order.order_id, paymentSessionId: order.payment_session_id, status: PaymentStatus.PENDING }, update: { amount: b.price, method: 'cashfree', gatewayRef: order.order_id, paymentSessionId: order.payment_session_id, status: PaymentStatus.PENDING, splitStatus: 'NOT_READY' } }),
       db.booking.update({ where: { id: b.id }, data: { status: BookingStatus.PAYMENT_PENDING } })
     ]);
-    res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: key });
+    res.json({ orderId: order.order_id, paymentSessionId: order.payment_session_id, mode: process.env.CASHFREE_ENV === 'production' ? 'production' : 'sandbox' });
   } catch (error) { console.error('Payment order creation failed', error); res.status(502).json({ error: 'Could not start payment. Retry shortly.' }); }
 });
+app.post('/api/v1/payments/cashfree/webhook', async function (req, res) {
+  const secret = cashfreeSecret, signature = req.header('x-webhook-signature'), timestamp = req.header('x-webhook-timestamp');
+  if (!secret || !signature || !timestamp || !Buffer.isBuffer(req.body)) return res.status(503).end();
+  const expected = createHmac('sha256', secret).update(timestamp + req.body.toString()).digest('base64');
+  const received = Buffer.from(signature), wanted = Buffer.from(expected);
+  if (received.length !== wanted.length || !timingSafeEqual(received, wanted)) return res.status(400).json({ error: 'Invalid webhook signature.' });
+  try {
+    const event = JSON.parse(req.body.toString());
+    if (event.type === 'PAYMENT_SUCCESS_WEBHOOK') {
+      const paid = event.data?.payment;
+      const order = event.data?.order;
+      const payment = order?.order_id ? await db.payment.findFirst({ where: { gatewayRef: order.order_id, method: 'cashfree' } }) : null;
+      if (payment && Number(paid?.payment_amount) === Number((payment.amount / 100).toFixed(2)) && paid?.payment_status === 'SUCCESS') {
+        await db.$transaction(async function (tx) {
+          const changed = await tx.payment.updateMany({ where: { id: payment.id, status: PaymentStatus.PENDING }, data: { status: PaymentStatus.VERIFIED, paidAt: new Date(), splitStatus: 'WAITING_FOR_ASSIGNMENT' } });
+          if (changed.count) await tx.booking.updateMany({ where: { id: payment.bookingId, status: BookingStatus.PAYMENT_PENDING }, data: { status: BookingStatus.PAID } });
+        });
+      }
+    }
+    res.json({ received: true });
+  } catch (error) { console.error('Cashfree webhook processing failed', error); res.status(500).end(); }
+});
+
+async function processCashfreeSplits() {
+  if (!easySplitEnabled || !cashfreeId || !cashfreeSecret) return;
+  const now = Date.now();
+  const candidates = await db.payment.findMany({ where: { method: 'cashfree', status: PaymentStatus.VERIFIED, paidAt: { lte: new Date(now - 120_000) }, OR: [{ splitStatus: 'PENDING' }, { splitStatus: { in: ['RETRY', 'PROCESSING'] }, splitUpdatedAt: { lte: new Date(now - 300_000) } }], booking: { workerId: { not: null }, status: { in: [BookingStatus.ASSIGNED, BookingStatus.WORKER_ON_THE_WAY, BookingStatus.IN_PROGRESS, BookingStatus.PHOTOS_UPLOADED, BookingStatus.APPROVED, BookingStatus.COMPLETED] } } }, include: { booking: { include: { worker: true } } }, take: 20 });
+  for (const payment of candidates) {
+    const vendorId = payment.booking.worker?.cashfreeVendorId;
+    if (!vendorId || !payment.gatewayRef) { await db.payment.update({ where: { id: payment.id }, data: { splitStatus: 'WAITING_FOR_VENDOR' } }); continue; }
+    const claim = await db.payment.updateMany({ where: { id: payment.id, OR: [{ splitStatus: 'PENDING' }, { splitStatus: { in: ['RETRY', 'PROCESSING'] }, splitUpdatedAt: { lte: new Date(Date.now() - 300_000) } }] }, data: { splitStatus: 'PROCESSING', splitUpdatedAt: new Date() } });
+    if (!claim.count) continue;
+    try {
+      const splitKey = createHash('sha256').update('quickwashhub-split:' + payment.id).digest('hex');
+      const splitResponse = await fetch(cashfreeEnv + '/easy-split/orders/' + encodeURIComponent(payment.gatewayRef) + '/split', { method: 'POST', headers: { 'x-client-id': cashfreeId, 'x-client-secret': cashfreeSecret, 'x-api-version': cashfreeVersion, 'x-idempotency-key': splitKey.slice(0, 8) + '-' + splitKey.slice(8, 12) + '-4' + splitKey.slice(13, 16) + '-a' + splitKey.slice(17, 20) + '-' + splitKey.slice(20, 32), 'Content-Type': 'application/json' }, body: JSON.stringify({ split: [{ vendor_id: vendorId, percentage: Number((payment.booking.workerEarning * 100 / payment.amount).toFixed(2)) }], disable_split: true }) });
+      if (!splitResponse.ok) throw new Error('Cashfree split request failed with ' + splitResponse.status);
+      await db.payment.update({ where: { id: payment.id }, data: { splitStatus: 'SUBMITTED', splitUpdatedAt: new Date() } });
+    } catch (error) {
+      console.error('Cashfree Easy Split submission failed', { paymentId: payment.id, error });
+      await db.payment.update({ where: { id: payment.id }, data: { splitStatus: 'RETRY', splitUpdatedAt: new Date() } });
+    }
+  }
+}
+setInterval(function () { processCashfreeSplits().catch(function (error) { console.error('Cashfree split queue failed', error); }); }, 30_000).unref();
 app.post('/api/v1/payments/razorpay/webhook', async function (req, res) {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET, signature = req.header('x-razorpay-signature');
   if (!secret || !signature || !Buffer.isBuffer(req.body)) return res.status(503).end();
@@ -288,7 +421,7 @@ app.get('/api/v1/worker/jobs', worker, async function (_req, res) {
   if (!profile || profile.kycStatus !== KycStatus.APPROVED) return res.status(403).json({ error: 'Worker account is not approved.' });
   if (!profile.isOnline) return res.json([]);
   const zoneIds = profile.zones.map(function (x) { return x.zoneId; });
-  res.json(await db.booking.findMany({ where: { status: BookingStatus.PAID, workerId: null, zoneId: { in: zoneIds } }, include: { service: true, vehicle: true, address: true, zone: true }, orderBy: { scheduledAt: 'asc' } }));
+  res.json(await db.booking.findMany({ where: { status: BookingStatus.PAID, workerId: null, zoneId: { in: zoneIds }, service: { category: 'VEHICLE' } }, include: { service: true, vehicle: { select: { model: true, type: true } }, zone: true }, orderBy: { scheduledAt: 'asc' } }));
 });
 app.get('/api/v1/worker/profile', worker, async function (_req, res) { const profile = await db.worker.findUnique({ where: { userId: res.locals.user.id }, include: { zones: { include: { zone: true } } } }); if (!profile) return res.status(404).json({ error: 'Worker profile is not provisioned.' }); res.json(profile); });
 app.get('/api/v1/worker/bookings', worker, async function (_req, res) { const profile = await db.worker.findUnique({ where: { userId: res.locals.user.id } }); if (!profile) return res.status(404).json({ error: 'Worker profile is not provisioned.' }); res.json(await db.booking.findMany({ where: { workerId: profile.id }, include: { service: true, vehicle: true, address: true, zone: true }, orderBy: { scheduledAt: 'desc' } })); });
@@ -304,8 +437,9 @@ app.post('/api/v1/worker/jobs/:id/accept', worker, async function (req, res) {
   const profile = await db.worker.findUnique({ where: { userId: res.locals.user.id }, include: { zones: true } });
   if (!profile || !profile.isOnline || profile.kycStatus !== KycStatus.APPROVED) return res.status(403).json({ error: 'Go online after your account is approved.' });
   const ids = profile.zones.map(function (x) { return x.zoneId; });
-  const result = await db.booking.updateMany({ where: { id: String(req.params.id), zoneId: { in: ids }, status: BookingStatus.PAID, workerId: null }, data: { workerId: profile.id, status: BookingStatus.ASSIGNED } });
+  const result = await db.booking.updateMany({ where: { id: String(req.params.id), zoneId: { in: ids }, status: BookingStatus.PAID, workerId: null, service: { category: 'VEHICLE' } }, data: { workerId: profile.id, status: BookingStatus.ASSIGNED } });
   if (!result.count) return res.status(409).json({ error: 'Job is no longer available.' });
+  await db.payment.updateMany({ where: { bookingId: String(req.params.id), method: 'cashfree', status: PaymentStatus.VERIFIED }, data: { splitStatus: 'PENDING' } });
   res.json({ id: String(req.params.id), status: BookingStatus.ASSIGNED });
 });
 app.patch('/api/v1/worker/bookings/:id/status', worker, async function (req, res) {
@@ -380,17 +514,30 @@ app.patch('/api/v1/admin/photos/:id', admin, async function (req, res) {
 
 app.post('/api/v1/admin/bookings/:id/assign', admin, async function (req, res) {
   const p = z.object({ workerId: z.string().min(1) }).safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a worker.' });
-  const booking = await db.booking.findUnique({ where: { id: String(req.params.id) } }); if (!booking) return res.status(404).json({ error: 'Booking not found.' });
-  const eligible = await db.workerZone.findFirst({ where: { workerId: p.data.workerId, zoneId: booking.zoneId, worker: { isOnline: true, kycStatus: KycStatus.APPROVED, user: { isActive: true } } } });
+  const booking = await db.booking.findUnique({ where: { id: String(req.params.id), }, include: { service: true } }); if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  const eligible = await db.workerZone.findFirst({ where: { workerId: p.data.workerId, zoneId: booking.zoneId, worker: { isOnline: true, kycStatus: KycStatus.APPROVED, ...(booking.service.category === 'SOLAR' ? { solarQualified: true } : {}), user: { isActive: true } } } });
   if (!eligible) return res.status(409).json({ error: 'Worker must be approved, online and assigned to this zone.' });
   const changed = await db.booking.updateMany({ where: { id: booking.id, workerId: null, status: BookingStatus.PAID }, data: { workerId: p.data.workerId, status: BookingStatus.ASSIGNED } });
   if (!changed.count) return res.status(409).json({ error: 'Booking is not available for assignment.' });
+  await db.payment.updateMany({ where: { bookingId: booking.id, method: 'cashfree', status: PaymentStatus.VERIFIED }, data: { splitStatus: 'PENDING' } });
   await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'ASSIGN_BOOKING', entity: 'Booking', entityId: booking.id, after: { workerId: p.data.workerId } } });
   res.json({ id: booking.id, status: BookingStatus.ASSIGNED, workerId: p.data.workerId });
 });
+app.post('/api/v1/admin/bookings/:id/quote', admin, async function (req, res) {
+  const p = z.object({ amount: z.number().int().min(100).max(100000000), note: z.string().trim().min(5).max(1000) }).strict().safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Enter a final quote in paise and an inspection note.' });
+  const booking = await db.booking.findUnique({ where: { id: String(req.params.id) }, include: { service: true, zone: true } });
+  if (!booking || booking.service.category !== 'SOLAR') return res.status(404).json({ error: 'Solar quote request not found.' });
+  if (booking.status !== BookingStatus.QUOTE_REQUESTED) return res.status(409).json({ error: 'This quote request has already been priced or canceled.' });
+  const commissionAmt = Math.round(p.data.amount * booking.zone.baseCommissionPct / 100);
+  const updated = await db.booking.update({ where: { id: booking.id }, data: { price: p.data.amount, commissionAmt, workerEarning: p.data.amount - commissionAmt, quoteNote: p.data.note, status: BookingStatus.QUOTE_PROVIDED } });
+  await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'PROVIDE_SOLAR_QUOTE', entity: 'Booking', entityId: booking.id, before: { status: booking.status }, after: { amount: updated.price, note: updated.quoteNote, status: updated.status } } });
+  res.json({ id: updated.id, status: updated.status, price: updated.price, note: updated.quoteNote });
+});
 app.get('/api/v1/admin/bookings', admin, async function (req, res) {
   const state = typeof req.query.status === 'string' && Object.values(BookingStatus).includes(req.query.status as BookingStatus) ? req.query.status as BookingStatus : undefined;
-  res.json(await db.booking.findMany({ where: state ? { status: state } : {}, include: { customer: { select: { id: true, email: true, name: true, phone: true } }, worker: { include: { user: { select: { id: true, email: true, name: true, phone: true } } } }, vehicle: true, service: true, zone: true }, orderBy: { createdAt: 'desc' }, take: 500 }));
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json(await db.booking.findMany({ where: state ? { status: state } : {}, include: { customer: { select: { id: true, email: true, name: true, phone: true } }, worker: { include: { user: { select: { id: true, email: true, name: true, phone: true } } } }, vehicle: true, address: true, service: true, zone: true, payment: true }, orderBy: { createdAt: 'desc' }, take: 500 }));
 });
 app.get('/api/v1/admin/workers', admin, async function (_req, res) { res.json(await db.worker.findMany({ include: { user: { select: { id: true, email: true, name: true, role: true, isActive: true } }, zones: { include: { zone: true } } }, orderBy: { user: { name: 'asc' } } })); });
 app.post('/api/v1/admin/workers', admin, async function (req, res) {
@@ -398,6 +545,24 @@ app.post('/api/v1/admin/workers', admin, async function (req, res) {
   if (!p.success) return res.status(400).json({ error: 'Worker email, name or type is invalid.' });
   try { const user = await db.user.upsert({ where: { email: p.data.email }, update: { name: p.data.name, role: Role.WORKER, isActive: true }, create: { email: p.data.email, name: p.data.name, role: Role.WORKER } }); const profile = await db.worker.upsert({ where: { userId: user.id }, update: { type: p.data.type }, create: { userId: user.id, type: p.data.type } }); res.status(201).json({ ...profile, user: { id: user.id, email: user.email, name: user.name, role: user.role } }); }
   catch (error) { console.error(error); res.status(409).json({ error: 'Could not add worker.' }); }
+});
+app.patch('/api/v1/admin/workers/:id/cashfree-vendor', admin, async function (req, res) {
+  const p = z.object({ vendorId: z.string().trim().min(1).max(100) }).strict().safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Enter the verified Cashfree Easy Split vendor ID.' });
+  const before = await db.worker.findUnique({ where: { id: String(req.params.id) }, select: { id: true, cashfreeVendorId: true } });
+  if (!before) return res.status(404).json({ error: 'Worker not found.' });
+  const updated = await db.worker.update({ where: { id: before.id }, data: { cashfreeVendorId: p.data.vendorId } });
+  await db.payment.updateMany({ where: { method: 'cashfree', status: PaymentStatus.VERIFIED, splitStatus: 'WAITING_FOR_VENDOR', booking: { workerId: before.id } }, data: { splitStatus: 'PENDING' } });
+  await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'SET_CASHFREE_VENDOR', entity: 'Worker', entityId: before.id, before: { cashfreeVendorId: before.cashfreeVendorId }, after: { cashfreeVendorId: p.data.vendorId } } });
+  res.json({ id: updated.id, cashfreeVendorId: updated.cashfreeVendorId });
+});
+app.patch('/api/v1/admin/workers/:id/solar-qualification', admin, async function (req, res) {
+  const p = z.object({ qualified: z.boolean() }).strict().safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'qualified must be true or false.' });
+  const updated = await db.worker.updateMany({ where: { id: String(req.params.id) }, data: { solarQualified: p.data.qualified } });
+  if (!updated.count) return res.status(404).json({ error: 'Worker not found.' });
+  await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'SET_SOLAR_QUALIFICATION', entity: 'Worker', entityId: String(req.params.id), after: p.data } });
+  res.json({ id: String(req.params.id), solarQualified: p.data.qualified });
 });
 app.patch('/api/v1/admin/workers/:id/kyc', admin, async function (req, res) {
   const p = z.object({ status: z.enum(['APPROVED', 'REJECTED']) }).safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'status must be APPROVED or REJECTED.' });
@@ -413,17 +578,36 @@ app.post('/api/v1/admin/campaigns', admin, async function (req, res) { const p =
 app.patch('/api/v1/admin/campaigns/:id', admin, async function (req, res) { const p = campaignInput.partial().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Campaign update is invalid.' }); const data = { ...p.data, ...(p.data.startDate ? { startDate: new Date(p.data.startDate) } : {}), ...(p.data.endDate ? { endDate: new Date(p.data.endDate) } : {}) }; const current = await db.campaign.findUnique({ where: { id: String(req.params.id) } }); if (!current) return res.status(404).json({ error: 'Campaign not found.' }); const updated = await db.campaign.update({ where: { id: current.id }, data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPDATE', entity: 'Campaign', entityId: current.id, before: { name: current.name, startDate: current.startDate, endDate: current.endDate }, after: p.data } }); res.json(updated); });
 app.get('/api/v1/admin/reports/summary', admin, async function (req, res) { const from = typeof req.query.from === 'string' ? new Date(req.query.from) : new Date(Date.now() - 30 * 86400000); const to = typeof req.query.to === 'string' ? new Date(req.query.to) : new Date(); if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || to < from) return res.status(400).json({ error: 'Date range is invalid.' }); const rows = await db.booking.groupBy({ by: ['status'], where: { createdAt: { gte: from, lte: to } }, _count: { _all: true }, _sum: { price: true } }); res.json({ from, to, bookings: rows.reduce(function (n, x) { return n + x._count._all; }, 0), revenuePaise: rows.filter(function (x) { return x.status !== BookingStatus.CANCELLED && x.status !== BookingStatus.REFUNDED; }).reduce(function (n, x) { return n + (x._sum.price || 0); }, 0), byStatus: rows.map(function (x) { return { status: x.status, count: x._count._all, amountPaise: x._sum.price || 0 }; }) }); });
 
+app.get('/api/v1/admin/zones/config', admin, function (_req, res) { res.setHeader('Cache-Control', 'private, no-store'); res.json({ googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null }); });
 app.get('/api/v1/admin/zones', admin, async function (_req, res) { res.json(await db.zone.findMany({ include: { prices: { include: { service: true } }, workers: { include: { worker: { include: { user: { select: { id: true, email: true, name: true } } } } } } }, orderBy: { name: 'asc' } })); });
-const ringSchema = z.array(z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])).min(4);
-const polygonSchema = z.union([z.object({ type: z.literal('Polygon'), coordinates: z.array(ringSchema).min(1) }), z.object({ type: z.literal('MultiPolygon'), coordinates: z.array(z.array(ringSchema).min(1)).min(1) })]);
-const zoneInput = z.object({ name: z.string().trim().min(2).max(100), baseCommissionPct: z.number().min(0).max(100), polygon: polygonSchema });
-app.post('/api/v1/admin/zones', admin, async function (req, res) { const p = zoneInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Zone geometry, name or commission is invalid.' }); const zone = await db.zone.create({ data: p.data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'CREATE', entity: 'Zone', entityId: zone.id, after: p.data } }); res.status(201).json(zone); });
-app.patch('/api/v1/admin/zones/:id', admin, async function (req, res) { const p = z.object({ name: z.string().trim().min(2).max(100).optional(), baseCommissionPct: z.number().min(0).max(100).optional(), polygon: polygonSchema.optional(), isActive: z.boolean().optional() }).strict().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Invalid zone update.' }); const before = await db.zone.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Zone not found.' }); const zone = await db.zone.update({ where: { id: before.id }, data: p.data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPDATE', entity: 'Zone', entityId: zone.id, before: { name: before.name, isActive: before.isActive, baseCommissionPct: before.baseCommissionPct }, after: p.data } }); res.json(zone); });
+const zoneInput = z.object({ name: z.string().trim().min(2).max(100), baseCommissionPct: z.number().min(0).max(100), centerLat: z.number().min(-90).max(90), centerLng: z.number().min(-180).max(180), radiusKm: z.number().min(0.25).max(30) }).strict();
+app.post('/api/v1/admin/zones', admin, async function (req, res) { const p = zoneInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a map center and radius between 0.25 and 30 km.' }); const zone = await db.zone.create({ data: p.data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'CREATE', entity: 'Zone', entityId: zone.id, after: p.data } }); res.status(201).json(zone); });
+app.patch('/api/v1/admin/zones/:id', admin, async function (req, res) {
+  const p = z.object({ name: z.string().trim().min(2).max(100).optional(), baseCommissionPct: z.number().min(0).max(100).optional(), centerLat: z.number().min(-90).max(90).optional(), centerLng: z.number().min(-180).max(180).optional(), radiusKm: z.number().min(0.25).max(30).optional(), isActive: z.boolean().optional() }).strict().safeParse(req.body);
+  if (!p.success || (p.success && (p.data.centerLat !== undefined || p.data.centerLng !== undefined || p.data.radiusKm !== undefined) && (p.data.centerLat === undefined || p.data.centerLng === undefined || p.data.radiusKm === undefined))) return res.status(400).json({ error: 'Provide the map center and radius together.' });
+  const before = await db.zone.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Zone not found.' });
+  const zone = await db.zone.update({ where: { id: before.id }, data: p.data });
+  await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPDATE', entity: 'Zone', entityId: zone.id, before: { name: before.name, isActive: before.isActive, baseCommissionPct: before.baseCommissionPct, centerLat: before.centerLat, centerLng: before.centerLng, radiusKm: before.radiusKm }, after: p.data } }); res.json(zone);
+});
 
 app.get('/api/v1/admin/services', admin, async function (_req, res) { res.json(await db.service.findMany({ include: { prices: { include: { zone: true } } }, orderBy: { name: 'asc' } })); });
-const serviceInput = z.object({ name: z.string().trim().min(2).max(100), vehicleType: z.nativeEnum(VehicleType), durationMin: z.number().int().min(5).max(600), isActive: z.boolean().default(true) });
-app.post('/api/v1/admin/services', admin, async function (req, res) { const p = serviceInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Invalid service.' }); res.status(201).json(await db.service.create({ data: p.data })); });
-app.put('/api/v1/admin/zones/:zoneId/prices/:serviceId', admin, async function (req, res) { const p = z.object({ price: z.number().int().positive().max(100000000), vehicleType: z.nativeEnum(VehicleType), festivalMultiplier: z.number().min(0.1).max(10).default(1) }).safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Price must be a positive amount in paise.' }); const result = await db.zonePrice.upsert({ where: { zoneId_serviceId_vehicleType: { zoneId: String(req.params.zoneId), serviceId: String(req.params.serviceId), vehicleType: p.data.vehicleType } }, create: { zoneId: String(req.params.zoneId), serviceId: String(req.params.serviceId), ...p.data }, update: p.data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPSERT_PRICE', entity: 'ZonePrice', entityId: result.id, after: p.data } }); res.json(result); });
+app.patch('/api/v1/admin/services/:id', admin, async function (req, res) { const p = z.object({ isActive: z.boolean() }).strict().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Provide a service activation setting.' }); const before = await db.service.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Service not found.' }); const active = before.category === 'HOME' && process.env.HOME_WASH_ENABLED !== 'true' ? false : p.data.isActive; const service = await db.service.update({ where: { id: before.id }, data: { isActive: active } }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'SET_SERVICE_ACTIVE', entity: 'Service', entityId: before.id, before: { isActive: before.isActive }, after: { isActive: active } } }); res.json(service); });
+const serviceInput = z.object({ name: z.string().trim().min(2).max(100), category: z.enum(['VEHICLE', 'SOLAR', 'HOME']).default('VEHICLE'), vehicleType: z.nativeEnum(VehicleType).optional(), durationMin: z.number().int().min(5).max(600), isActive: z.boolean().optional() }).strict().refine(function (x) { return x.category !== 'VEHICLE' || !!x.vehicleType; }, { message: 'Vehicle type required for vehicle services.' });
+app.post('/api/v1/admin/services', admin, async function (req, res) { const p = serviceInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a category and the matching details for this service.' }); const data = { ...p.data, isActive: p.data.category === 'HOME' ? p.data.isActive === true && process.env.HOME_WASH_ENABLED === 'true' : p.data.isActive ?? true }; res.status(201).json(await db.service.create({ data })); });
+app.put('/api/v1/admin/zones/:zoneId/prices/:serviceId', admin, async function (req, res) {
+  const p = z.object({ price: z.number().int().positive().max(100000000), vehicleType: z.nativeEnum(VehicleType), festivalMultiplier: z.number().min(0.1).max(10).default(1) }).strict().safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Price must be a positive amount in paise.' });
+  const service = await db.service.findUnique({ where: { id: String(req.params.serviceId) } });
+  if (!service || service.category !== 'VEHICLE' || service.vehicleType !== p.data.vehicleType) return res.status(422).json({ error: 'Only matching vehicle services can have an immediate zone price. Solar quotes are set after inspection.' });
+  const where = { zoneId: String(req.params.zoneId), serviceId: service.id, vehicleType: p.data.vehicleType, solarPanelTier: null };
+  const existing = await db.zonePrice.findFirst({ where });
+  const result = existing ? await db.zonePrice.update({ where: { id: existing.id }, data: { ...p.data } }) : await db.zonePrice.create({ data: { ...where, ...p.data } });
+  await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPSERT_PRICE', entity: 'ZonePrice', entityId: result.id, after: p.data } }); res.json(result);
+});
+
+app.get('/api/v1/admin/support/tickets', admin, async function (_req, res) { res.json(await db.supportTicket.findMany({ include: { customer: { select: { name: true, email: true, phone: true } }, booking: { select: { id: true, status: true } } }, orderBy: { createdAt: 'desc' }, take: 200 })); });
+app.patch('/api/v1/admin/support/tickets/:id', admin, async function (req, res) { const p = z.object({ status: z.enum(['OPEN', 'IN_REVIEW', 'RESOLVED']) }).strict().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Invalid ticket status.' }); const before = await db.supportTicket.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Ticket not found.' }); const row = await db.supportTicket.update({ where: { id: before.id }, data: { status: p.data.status } }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPDATE_SUPPORT_TICKET', entity: 'SupportTicket', entityId: row.id, before: { status: before.status }, after: { status: row.status } } }); res.json({ reference: row.reference, status: row.status }); });
+app.get('/api/v1/admin/account-deletion-requests', admin, async function (_req, res) { res.json(await db.accountDeletionRequest.findMany({ include: { user: { select: { id: true, name: true, email: true, phone: true } } }, orderBy: { createdAt: 'asc' }, take: 200 })); });
 
 app.get('/api/v1/admin/payouts', admin, async function (_req, res) { res.json(await db.payout.findMany({ include: { worker: { include: { user: { select: { id: true, email: true, name: true } } } } }, orderBy: { id: 'desc' } })); });
 app.post('/api/v1/admin/payouts', admin, async function (req, res) {

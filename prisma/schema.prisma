@@ -17,6 +17,12 @@ enum VehicleType {
   BIKE
 }
 
+enum ServiceCategory {
+  VEHICLE
+  SOLAR
+  HOME
+}
+
 enum WorkerType {
   PERMANENT
   TEMP
@@ -30,6 +36,8 @@ enum KycStatus {
 
 enum BookingStatus {
   CREATED
+  QUOTE_REQUESTED
+  QUOTE_PROVIDED
   PAYMENT_PENDING
   PAID
   ASSIGNING
@@ -91,6 +99,8 @@ model User {
   authSessions    AuthSession[]
   auditLogs       AuditLog[]
   authChallenges  AuthChallenge[]
+  supportTickets  SupportTicket[]
+  deletionRequests AccountDeletionRequest[]
 }
 
 model AuthChallenge {
@@ -119,6 +129,8 @@ model Worker {
   currentLng Float?
   rating     Float          @default(5)
   upiId      String?
+  cashfreeVendorId String?
+  solarQualified Boolean @default(false)
   bookings   Booking[]
   zones      WorkerZone[]
   ledger     WalletLedger[]
@@ -154,6 +166,9 @@ model Zone {
   isActive          Boolean      @default(true)
   baseCommissionPct Float        @default(20)
   polygon           Json?
+  centerLat         Float?
+  centerLng         Float?
+  radiusKm          Float?
   prices            ZonePrice[]
   addresses         Address[]
   workers           WorkerZone[]
@@ -164,7 +179,8 @@ model Zone {
 model Service {
   id          String      @id @default(cuid())
   name        String
-  vehicleType VehicleType
+  category    ServiceCategory @default(VEHICLE)
+  vehicleType VehicleType?
   durationMin Int
   isActive    Boolean     @default(true)
   prices      ZonePrice[]
@@ -175,13 +191,14 @@ model ZonePrice {
   id                 String      @id @default(cuid())
   zoneId             String
   serviceId          String
-  vehicleType        VehicleType
+  vehicleType        VehicleType?
+  solarPanelTier     String?
   price              Int
   festivalMultiplier Float       @default(1)
   zone               Zone        @relation(fields: [zoneId], references: [id])
   service            Service     @relation(fields: [serviceId], references: [id])
 
-  @@unique([zoneId, serviceId, vehicleType])
+  @@unique([zoneId, serviceId, vehicleType, solarPanelTier])
 }
 
 model WorkerZone {
@@ -198,7 +215,12 @@ model Booking {
   customerId    String
   workerId      String?
   zoneId        String
-  vehicleId     String
+  vehicleId     String?
+  solarPanelCount Int?
+  solarRoofType String?
+  solarAccessNotes String?
+  solarPropertyType String?
+  quoteNote String?
   addressId     String
   serviceId     String
   scheduledAt   DateTime
@@ -211,13 +233,14 @@ model Booking {
   customer      User           @relation(fields: [customerId], references: [id])
   worker        Worker?        @relation(fields: [workerId], references: [id])
   zone          Zone           @relation(fields: [zoneId], references: [id])
-  vehicle       Vehicle        @relation(fields: [vehicleId], references: [id])
+  vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id])
   address       Address        @relation(fields: [addressId], references: [id])
   service       Service        @relation(fields: [serviceId], references: [id])
   photos        BookingPhoto[]
   payment       Payment?
   rating        Rating?
   walletEntries WalletLedger[]
+  supportTickets SupportTicket[]
 }
 
 model BookingPhoto {
@@ -239,6 +262,10 @@ model Payment {
   method     String
   gatewayRef String?       @unique
   status     PaymentStatus @default(PENDING)
+  paymentSessionId String?
+  splitStatus String @default("NOT_READY")
+  splitUpdatedAt DateTime?
+  paidAt DateTime?
   booking    Booking       @relation(fields: [bookingId], references: [id])
 }
 
@@ -309,4 +336,33 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+model SupportTicket {
+  id         String   @id @default(cuid())
+  reference  String   @unique
+  customerId String
+  bookingId  String?
+  subject    String
+  message    String
+  status     String   @default("OPEN")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   User     @relation(fields: [customerId], references: [id])
+  booking    Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AccountDeletionRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  reason    String?
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }
