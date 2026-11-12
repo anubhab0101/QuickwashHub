@@ -35,7 +35,7 @@ const storageOrigin = process.env.S3_ENDPOINT ? new URL(process.env.S3_ENDPOINT)
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
 app.use(helmet.crossOriginOpenerPolicy({ policy: 'same-origin-allow-popups' }));
-app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://checkout.razorpay.com', 'https://accounts.google.com'], styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'], fontSrc: ["'self'", 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:', storageOrigin, 'https://*.googleusercontent.com'].filter(Boolean), connectSrc: ["'self'", 'https://api.razorpay.com', 'https://accounts.google.com', 'https://oauth2.googleapis.com', storageOrigin].filter(Boolean), frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com', 'https://accounts.google.com'], objectSrc: ["'none'"], baseUri: ["'self'"] } } }));
+app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://checkout.razorpay.com', 'https://accounts.google.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com'], styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'], fontSrc: ["'self'", 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:', storageOrigin, 'https://*.googleusercontent.com', 'https://*.googleapis.com', 'https://*.gstatic.com'].filter(Boolean), connectSrc: ["'self'", 'https://api.razorpay.com', 'https://accounts.google.com', 'https://oauth2.googleapis.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com', storageOrigin].filter(Boolean), frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com', 'https://accounts.google.com'], objectSrc: ["'none'"], baseUri: ["'self'"] } } }));
 if (allowedOrigins.length) app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use('/api/v1/payments/razorpay/webhook', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '1mb' }));
@@ -207,7 +207,7 @@ app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_re
     db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
     db.zonePrice.findMany({ where: { zone: { isActive: true }, service: { isActive: true } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } })
   ]);
-  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, services: prices.map(function (p) { return { id: p.serviceId, name: p.service.name, vehicleType: p.vehicleType, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name }; }) });
+  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, services: prices.map(function (p) { return { id: p.serviceId, name: p.service.name, vehicleType: p.vehicleType, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name }; }), googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null });
 });
 
 app.get('/api/v1/services', authenticated(), async function (req, res) {

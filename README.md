@@ -24,6 +24,7 @@ The first admin creates zones, services, prices and worker accounts. Customers r
 - `CORS_ORIGIN`: exact website origin(s); HTTPS in production.
 - `RESEND_API_KEY`, `EMAIL_FROM`: Resend API key and verified sender for verification/reset messages.
 - `GOOGLE_CLIENT_ID`: Google OAuth Web client ID. Add every deployed HTTPS origin to its authorized JavaScript origins in Google Cloud Console.
+- `GOOGLE_MAPS_API_KEY`: optional browser key for the address map and reverse geocoding. Enable Maps JavaScript API and Geocoding API; restrict the key to your site referrers and those APIs. Device location works without this key on HTTPS (or localhost).
 - `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`: merchant credentials; configure `payment.captured` webhook at `/api/v1/payments/razorpay/webhook`.
 - `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`: private S3/R2-compatible image storage. Allow website-origin PUT uploads with `Content-Type`, block public access, and set retention.
 - `INITIAL_ADMIN_EMAIL`: only needed for one-time admin bootstrap.
