@@ -1,9 +1,9 @@
-const CACHE_NAME = 'quickwashhub-shell-v9';
+const CACHE_NAME = 'quickwashhub-shell-v11';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/styles.css?v=9',
-  '/app.js?v=7',
+  '/styles.css?v=10',
+  '/app.js?v=8',
   '/manifest.webmanifest?v=4',
   '/icons/icon-192.png?v=4',
   '/icons/icon-512.png?v=4',
@@ -29,18 +29,26 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).then(response => {
-      if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put('/', response.clone()));
-      return response;
-    }).catch(async () => (await caches.match('/')) || Response.error()));
+    event.respondWith((async () => {
+      const cached = await caches.match('/');
+      const update = fetch(request).then(response => {
+        if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put('/', response.clone()));
+        return response;
+      });
+      if (cached) { event.waitUntil(update.catch(() => {})); return cached; }
+      return update.catch(async () => (await caches.match('/')) || Response.error());
+    })());
     return;
   }
 
   if (request.destination === 'style' || request.destination === 'script' || url.pathname.endsWith('.webmanifest')) {
-    event.respondWith(fetch(request).then(response => {
+    event.respondWith((async () => {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      const response = await fetch(request);
       if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
       return response;
-    }).catch(async () => (await caches.match(request)) || Response.error()));
+    })());
     return;
   }
 
