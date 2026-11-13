@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { OAuth2Client } from 'google-auth-library';
-import webPush from 'web-push';
+import { sendNotification, setVapidDetails } from 'web-push';
 import { createMfaSecret, decryptMfaSecret, encryptMfaSecret, verifyTotp } from './security/admin-mfa.js';
 import { calculateVehicleCouponDiscount } from './domain/coupon-pricing.js';
 
@@ -43,7 +43,7 @@ if (production && (!process.env.CORS_ORIGIN || !process.env.RESEND_API_KEY || !p
 if (production && allowedOrigins.some(function (origin) { return origin === '*' || new URL(origin).protocol !== 'https:'; })) throw new Error('Production CORS origins must be exact HTTPS origins.');
 const storageOrigin = process.env.S3_ENDPOINT ? new URL(process.env.S3_ENDPOINT).origin : '';
 const pushReady = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
-if (pushReady) webPush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@quickwashhub.com', process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!);
+if (pushReady) setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@quickwashhub.com', process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!);
 
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
@@ -193,7 +193,7 @@ async function sendQueuedDelivery(delivery: any) {
   }
   if (delivery.channel === 'PUSH') {
     if (!pushReady) throw new Error('VAPID push credentials are not configured.');
-    try { await webPush.sendNotification({ endpoint: delivery.recipient, keys: data.keys as any }, JSON.stringify({ title: data.title, body: data.body, url: data.url })); }
+    try { await sendNotification({ endpoint: delivery.recipient, keys: data.keys as any }, JSON.stringify({ title: data.title, body: data.body, url: data.url })); }
     catch (error: any) { if (error?.statusCode === 404 || error?.statusCode === 410) { await db.pushSubscription.deleteMany({ where: { endpoint: delivery.recipient } }); return; } throw error; }
     return;
   }
