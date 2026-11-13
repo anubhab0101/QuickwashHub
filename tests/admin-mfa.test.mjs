@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMfaSecret, decryptMfaSecret, encryptMfaSecret, totpAt, verifyTotp } from '../dist/src/security/admin-mfa.js';
 import { calculateVehicleCouponDiscount } from '../dist/src/domain/coupon-pricing.js';
+import { sendNotification, setVapidDetails } from 'web-push';
+
+test('web-push ESM exports load by name in the Node runtime', () => {
+  assert.equal(typeof sendNotification, 'function');
+  assert.equal(typeof setVapidDetails, 'function');
+});
 
 const RFC_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
 const SIGNING_SECRET = 'a-test-only-signing-secret-that-is-long-enough';
