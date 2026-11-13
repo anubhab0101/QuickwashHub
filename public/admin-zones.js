@@ -141,7 +141,7 @@ function workersPage() {
 async function loadWorkersPage() {
   const workers = await api('/api/v1/admin/workers');
   document.querySelector('#admin-workers').innerHTML = panel('Worker list', workers.map(w =>
-    '<div class="row"><div class="info"><strong>' + esc(w.user.name || w.user.email) + '</strong><small>' + esc(w.type) + ' · KYC ' + esc(w.kycStatus) + ' · ' + (w.isOnline ? 'online' : 'offline') + ' · Solar ' + (w.solarQualified ? 'qualified' : 'not qualified') + ' · Cashfree vendor ' + esc(w.cashfreeVendorId || 'not set') + '</small></div>' +
+    '<div class="row"><div class="info"><strong>' + esc(w.user.name || w.user.email) + '</strong><small>' + esc(w.type) + ' · Account ' + (w.user.isActive ? 'active' : 'blocked') + ' · KYC ' + esc(w.kycStatus) + ' · ' + (w.isOnline ? 'online' : 'offline') + ' · Zones: ' + esc(w.zones.map(z => z.zone.name).join(', ') || 'none assigned') + ' · Solar ' + (w.solarQualified ? 'qualified' : 'not qualified') + ' · Cashfree vendor ' + esc(w.cashfreeVendorId || 'not set') + '</small></div>' +
     (w.kycStatus !== 'APPROVED' ? '<button class="secondary" data-kyc="' + esc(w.id) + '">Approve KYC</button>' : '') +
     '<button class="secondary" data-solar-qualified="' + esc(w.id) + '" data-qualified="' + w.solarQualified + '">' + (w.solarQualified ? 'Remove solar qualification' : 'Mark solar-qualified') + '</button>' +
     '<button class="secondary" data-cashfree-vendor="' + esc(w.id) + '" data-current-vendor="' + esc(w.cashfreeVendorId || '') + '">' + (w.cashfreeVendorId ? 'Update Cashfree vendor ID' : 'Set Cashfree vendor ID') + '</button>' +
@@ -245,7 +245,7 @@ async function loadZonesPage() {
   });
   document.querySelector('#worker-zone-form')?.addEventListener('submit', async event => {
     event.preventDefault(); event.stopImmediatePropagation(); const data = new FormData(event.currentTarget);
-    try { await api('/api/v1/admin/workers/' + encodeURIComponent(data.get('workerId')) + '/zones/' + encodeURIComponent(data.get('zoneId')), { method: 'PUT' }); toast('Worker assigned to zone'); }
+    try { await api('/api/v1/admin/workers/' + encodeURIComponent(data.get('workerId')) + '/zones/' + encodeURIComponent(data.get('zoneId')), { method: 'PUT' }); await render(); toast('Worker assigned to zone. They must still be KYC-approved and online to receive jobs.'); }
     catch (error) { toast(error.message); }
   }, true);
 

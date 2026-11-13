@@ -211,15 +211,16 @@ app.post('/api/v1/auth/logout', async function (req, res) {
 });
 async function customerSnapshot(userId: string, user: { id: string; name: string | null; role: Role }) {
   const serviceZoneFilter = { isActive: true, ...pilotZoneWhere };
-  const [vehicles, addresses, prices, solarServices, homeServices, zones, rows] = await Promise.all([
+  const [vehicles, addresses, prices, additionalServices, zones, rows] = await Promise.all([
     db.vehicle.findMany({ where: { customerId: userId }, orderBy: { model: 'asc' } }),
     db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
     db.zonePrice.findMany({ where: { zone: serviceZoneFilter, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
-    db.service.findMany({ where: { category: 'SOLAR', isActive: true } }),
-    db.service.findMany({ where: { category: 'HOME' } }),
+    db.service.findMany({ where: { category: { in: ['SOLAR', 'HOME'] } } }),
     db.zone.findMany({ where: serviceZoneFilter, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true } }),
     db.booking.findMany({ where: { customerId: userId }, include: { service: true, vehicle: true, worker: { include: { user: { select: { name: true } } } }, zone: true, rating: true, photos: { select: { id: true, type: true, status: true } } }, orderBy: { createdAt: 'desc' }, take: 100 })
   ]);
+  const solarServices = additionalServices.filter(function (service) { return service.category === 'SOLAR'; });
+  const homeServices = additionalServices.filter(function (service) { return service.category === 'HOME'; });
   return {
     catalog: { user: { id: user.id, name: user.name, role: user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: true }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null },
     bookings: rows.map(function (b) { return { id: b.id, status: b.status, service: b.service.name, vehicle: b.vehicle ? b.vehicle.model + ' · ' + b.vehicle.number : b.solarPropertyType ? b.solarPropertyType + ' solar panels (' + (b.solarPanelCount || 'quantity TBD') + ')' : '', solarPropertyType: b.solarPropertyType, solarPanelCount: b.solarPanelCount, solarRoofType: b.solarRoofType, solarAccessNotes: b.solarAccessNotes, quoteNote: b.quoteNote, scheduledAt: b.scheduledAt, price: b.price, worker: b.worker?.user.name || null, zone: b.zone.name, photos: b.photos, rating: b.rating }; })
@@ -234,14 +235,15 @@ app.get('/api/v1/me', authenticated(), async function (_req, res) {
 });
 app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_req, res) {
   const userId = res.locals.user.id;
-  const [vehicles, addresses, prices, solarServices, homeServices, zones] = await Promise.all([
+  const [vehicles, addresses, prices, additionalServices, zones] = await Promise.all([
     db.vehicle.findMany({ where: { customerId: userId }, orderBy: { model: 'asc' } }),
     db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
     db.zonePrice.findMany({ where: { zone: { isActive: true, ...pilotZoneWhere }, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
-    db.service.findMany({ where: { category: 'SOLAR', isActive: true } }),
-    db.service.findMany({ where: { category: 'HOME' } }),
+    db.service.findMany({ where: { category: { in: ['SOLAR', 'HOME'] } } }),
     db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true } })
   ]);
+  const solarServices = additionalServices.filter(function (service) { return service.category === 'SOLAR'; });
+  const homeServices = additionalServices.filter(function (service) { return service.category === 'HOME'; });
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: true }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null });
 });
@@ -515,8 +517,18 @@ app.patch('/api/v1/admin/photos/:id', admin, async function (req, res) {
 app.post('/api/v1/admin/bookings/:id/assign', admin, async function (req, res) {
   const p = z.object({ workerId: z.string().min(1) }).safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a worker.' });
   const booking = await db.booking.findUnique({ where: { id: String(req.params.id), }, include: { service: true } }); if (!booking) return res.status(404).json({ error: 'Booking not found.' });
-  const eligible = await db.workerZone.findFirst({ where: { workerId: p.data.workerId, zoneId: booking.zoneId, worker: { isOnline: true, kycStatus: KycStatus.APPROVED, ...(booking.service.category === 'SOLAR' ? { solarQualified: true } : {}), user: { isActive: true } } } });
-  if (!eligible) return res.status(409).json({ error: 'Worker must be approved, online and assigned to this zone.' });
+  const [candidate, zoneLink] = await Promise.all([
+    db.worker.findUnique({ where: { id: p.data.workerId }, select: { id: true, isOnline: true, kycStatus: true, solarQualified: true, user: { select: { isActive: true } } } }),
+    db.workerZone.findUnique({ where: { workerId_zoneId: { workerId: p.data.workerId, zoneId: booking.zoneId } }, select: { workerId: true } })
+  ]);
+  if (!candidate) return res.status(404).json({ error: 'Worker not found.' });
+  const blockers: string[] = [];
+  if (!candidate.user.isActive) blockers.push('account is blocked');
+  if (candidate.kycStatus !== KycStatus.APPROVED) blockers.push('KYC is not approved');
+  if (!candidate.isOnline) blockers.push('worker is offline');
+  if (!zoneLink) blockers.push('worker is not assigned to this exact service zone in Admin → Zones');
+  if (booking.service.category === 'SOLAR' && !candidate.solarQualified) blockers.push('worker is not marked Solar-qualified');
+  if (blockers.length) return res.status(409).json({ error: 'Cannot assign this booking: ' + blockers.join('; ') + '.' });
   const changed = await db.booking.updateMany({ where: { id: booking.id, workerId: null, status: BookingStatus.PAID }, data: { workerId: p.data.workerId, status: BookingStatus.ASSIGNED } });
   if (!changed.count) return res.status(409).json({ error: 'Booking is not available for assignment.' });
   await db.payment.updateMany({ where: { bookingId: booking.id, method: 'cashfree', status: PaymentStatus.VERIFIED }, data: { splitStatus: 'PENDING' } });
@@ -537,7 +549,7 @@ app.post('/api/v1/admin/bookings/:id/quote', admin, async function (req, res) {
 app.get('/api/v1/admin/bookings', admin, async function (req, res) {
   const state = typeof req.query.status === 'string' && Object.values(BookingStatus).includes(req.query.status as BookingStatus) ? req.query.status as BookingStatus : undefined;
   res.setHeader('Cache-Control', 'private, no-store');
-  res.json(await db.booking.findMany({ where: state ? { status: state } : {}, include: { customer: { select: { id: true, email: true, name: true, phone: true } }, worker: { include: { user: { select: { id: true, email: true, name: true, phone: true } } } }, vehicle: true, address: true, service: true, zone: true, payment: true }, orderBy: { createdAt: 'desc' }, take: 500 }));
+  res.json(await db.booking.findMany({ where: state ? { status: state } : {}, include: { customer: { select: { id: true, email: true, name: true, phone: true } }, worker: { include: { user: { select: { id: true, email: true, name: true, phone: true } } } }, vehicle: true, address: true, service: true, zone: true, payment: true }, orderBy: { createdAt: 'desc' }, take: 1000 }));
 });
 app.get('/api/v1/admin/workers', admin, async function (_req, res) { res.json(await db.worker.findMany({ include: { user: { select: { id: true, email: true, name: true, role: true, isActive: true } }, zones: { include: { zone: true } } }, orderBy: { user: { name: 'asc' } } })); });
 app.post('/api/v1/admin/workers', admin, async function (req, res) {
