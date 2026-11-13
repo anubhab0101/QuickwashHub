@@ -1,10 +1,10 @@
-const CACHE_NAME = 'quickwashhub-shell-v16';
+const CACHE_NAME = 'quickwashhub-shell-v18';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/styles.css?v=13',
-  '/app.js?v=11',
-  '/admin-zones.js?v=3',
+  '/styles.css?v=15',
+  '/app.js?v=13',
+  '/admin-zones.js?v=5',
   '/policies.html',
   '/policies.css?v=1',
   '/policies.js?v=1',
@@ -25,6 +25,26 @@ self.addEventListener('activate', event => {
       .map(key => caches.delete(key))
   )));
   self.clients.claim();
+});
+
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data?.text() || '' }; }
+  event.waitUntil(self.registration.showNotification(data.title || 'QuickWashHub', {
+    body: data.body || 'A new update is ready.',
+    icon: '/icons/icon-192.png?v=4',
+    badge: '/icons/icon-192.png?v=4',
+    data: { url: data.url || '/' }
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+    const existing = clients.find(client => client.url === url);
+    return existing ? existing.focus() : self.clients.openWindow(url);
+  }));
 });
 
 self.addEventListener('fetch', event => {

@@ -4,11 +4,49 @@ let adminZoneCircle = null;
 let adminZoneEditingId = null;
 let adminZoneMapPromise = null;
 
+const QWH_ODIA = {
+  'ACCOUNT': 'ଖାତା', 'YOUR ACCOUNT': 'ଆପଣଙ୍କ ଖାତା', 'Install app': 'ଆପ୍ ଇନଷ୍ଟଲ୍ କରନ୍ତୁ', 'Sign out': 'ସାଇନ୍ ଆଉଟ୍',
+  'Overview': 'ସାରାଂଶ', 'Bookings': 'ବୁକିଂଗୁଡ଼ିକ', 'Book a wash': 'ଧୋଇବା ବୁକ୍ କରନ୍ତୁ', 'Vehicles': 'ଯାନବାହନ', 'Addresses': 'ଠିକଣା', 'Offers & alerts': 'ଅଫର୍ ଓ ସୂଚନା', 'Support': 'ସହାୟତା', 'Support desk': 'ସହାୟତା କେନ୍ଦ୍ର',
+  'Help and support': 'ସହାୟତା', 'Send a booking question and keep its reference number.': 'ବୁକିଂ ବିଷୟରେ ପ୍ରଶ୍ନ ପଠାନ୍ତୁ ଏବଂ ରେଫରେନ୍ସ ନମ୍ବର ସଂରକ୍ଷଣ କରନ୍ତୁ।', 'Contact QuickWashHub': 'QuickWashHub ସହିତ ଯୋଗାଯୋଗ କରନ୍ତୁ', 'Booking (optional)': 'ବୁକିଂ (ଇଚ୍ଛାଧୀନ)', 'General question': 'ସାଧାରଣ ପ୍ରଶ୍ନ', 'Subject': 'ବିଷୟ', 'How can we help?': 'ଆମେ କିପରି ସାହାଯ୍ୟ କରିପାରିବୁ?', 'Send support request': 'ସହାୟତା ଅନୁରୋଧ ପଠାନ୍ତୁ', 'Your support requests': 'ଆପଣଙ୍କ ସହାୟତା ଅନୁରୋଧ', 'Loading requests…': 'ଅନୁରୋଧ ଲୋଡ୍ ହେଉଛି…', 'Account data': 'ଖାତା ତଥ୍ୟ', 'You can request account deletion. We will review any records that must be kept for payment or legal obligations.': 'ଆପଣ ଖାତା ଡିଲିଟ୍ କରିବାକୁ ଅନୁରୋଧ କରିପାରିବେ। ଦେୟ କିମ୍ବା ଆଇନଗତ କାରଣରୁ ରଖିବାକୁ ପଡ଼ୁଥିବା ରେକର୍ଡ ଆମେ ଯାଞ୍ଚ କରିବୁ।', 'Request account deletion': 'ଖାତା ଡିଲିଟ୍ କରିବାକୁ ଅନୁରୋଧ କରନ୍ତୁ', 'No support requests yet.': 'ଏପର୍ଯ୍ୟନ୍ତ କୌଣସି ସହାୟତା ଅନୁରୋଧ ନାହିଁ।',
+  'Hello, ': 'ନମସ୍କାର, ', 'Book a convenient car, bike, or solar-panel wash.': 'କାର୍, ବାଇକ୍ କିମ୍ବା ସୋଲାର୍ ପ୍ୟାନେଲ୍ ଧୋଇବା ସହଜରେ ବୁକ୍ କରନ୍ତୁ।', 'Your next booking': 'ଆପଣଙ୍କ ପରବର୍ତ୍ତୀ ବୁକିଂ', 'No booking yet': 'ଏପର୍ଯ୍ୟନ୍ତ ବୁକିଂ ନାହିଁ', 'Choose a service and book in a few steps.': 'ସେବା ବାଛନ୍ତୁ ଏବଂ କିଛି ପଦକ୍ଷେପରେ ବୁକ୍ କରନ୍ତୁ।', 'My vehicles': 'ମୋ ଯାନବାହନ', 'My addresses': 'ମୋ ଠିକଣା', 'Get help': 'ସହାୟତା ପାଆନ୍ତୁ', 'Recent bookings': 'ସାମ୍ପ୍ରତିକ ବୁକିଂ', 'Services in your area': 'ଆପଣଙ୍କ ଅଞ୍ଚଳର ସେବା', 'Services are being set up for your zone.': 'ଆପଣଙ୍କ ଜୋନ୍ ପାଇଁ ସେବା ପ୍ରସ୍ତୁତ ହେଉଛି।', 'Residential or commercial · quote after site inspection': 'ଘରୋଇ କିମ୍ବା ବାଣିଜ୍ୟିକ · ସ୍ଥାନ ଯାଞ୍ଚ ପରେ ମୂଲ୍ୟ ଜଣାଯିବ', 'Request quote': 'ମୂଲ୍ୟ ଅନୁରୋଧ କରନ୍ତୁ', 'Coming later': 'ପରେ ଆସିବ', 'Not available yet': 'ଏବେ ଉପଲବ୍ଧ ନାହିଁ',
+  'Your vehicles': 'ଆପଣଙ୍କ ଯାନବାହନ', 'Only vehicles you add to your account appear here.': 'ଆପଣ ଖାତାରେ ଯୋଡ଼ିଥିବା ଯାନବାହନ ଏଠାରେ ଦେଖାଯିବ।', 'Add a vehicle': 'ଯାନବାହନ ଯୋଡ଼ନ୍ତୁ', 'Type': 'ପ୍ରକାର', 'Make and model': 'କମ୍ପାନୀ ଓ ମଡେଲ୍', 'Registration number': 'ରେଜିଷ୍ଟ୍ରେସନ୍ ନମ୍ବର', 'Add vehicle': 'ଯାନବାହନ ଯୋଡ଼ନ୍ତୁ', 'Saved vehicles': 'ସଂରକ୍ଷିତ ଯାନବାହନ', 'Remove': 'ହଟାନ୍ତୁ',
+  'Service addresses': 'ସେବା ଠିକଣା', 'Pin your location and add the nearby directions a wash partner needs.': 'ସ୍ଥାନ ପିନ୍ କରନ୍ତୁ ଏବଂ ସେବାକର୍ମୀଙ୍କ ପାଇଁ ନିକଟସ୍ଥ ଚିହ୍ନ ଲେଖନ୍ତୁ।', 'Add a service address': 'ସେବା ଠିକଣା ଯୋଡ଼ନ୍ତୁ', '◎ Use my current location': '◎ ମୋ ବର୍ତ୍ତମାନର ସ୍ଥାନ ବ୍ୟବହାର କରନ୍ତୁ', 'Your street address fills from the pin. Add nearby directions below.': 'ପିନ୍‌ରୁ ଠିକଣା ଭରାଯିବ। ତଳେ ନିକଟସ୍ଥ ଚିହ୍ନ ଯୋଡ଼ନ୍ତୁ।', 'Drag the pin or tap the map to adjust the pickup location.': 'ପିନ୍ ଟାଣନ୍ତୁ କିମ୍ବା ମାନଚିତ୍ରକୁ ଟ୍ୟାପ୍ କରି ସ୍ଥାନ ବଦଳାନ୍ତୁ।', 'Save as': 'ଏହି ନାମରେ ସଂରକ୍ଷଣ କରନ୍ତୁ', 'Detected address': 'ଚିହ୍ନଟ ଠିକଣା', 'Nearby landmark or exact directions': 'ନିକଟସ୍ଥ ଚିହ୍ନ କିମ୍ବା ସଠିକ୍ ନିର୍ଦ୍ଦେଶ', 'Check service area and save →': 'ସେବା ଅଞ୍ଚଳ ଯାଞ୍ଚ କରି ସଂରକ୍ଷଣ କରନ୍ତୁ →', 'Saved addresses': 'ସଂରକ୍ଷିତ ଠିକଣା',
+  'Offers & alerts': 'ଅଫର୍ ଓ ସୂଚନା', 'Choose whether to receive offers by email and WhatsApp. Push also needs your browser permission.': 'ଇମେଲ୍ ଓ WhatsApp ରେ ଅଫର୍ ପାଇବେ କି ନାହିଁ ବାଛନ୍ତୁ। ପୁଶ୍ ସୂଚନା ପାଇଁ ବ୍ରାଉଜର୍ ଅନୁମତି ଦରକାର।', 'Marketing preferences': 'ଅଫର୍ ପସନ୍ଦ', 'Send me QuickWashHub offers by email and WhatsApp. I can unsubscribe any time.': 'ମୋତେ ଇମେଲ୍ ଓ WhatsApp ରେ QuickWashHub ଅଫର୍ ପଠାନ୍ତୁ। ମୁଁ ଯେକୌଣସି ସମୟରେ ବନ୍ଦ କରିପାରିବି।', 'Save preferences': 'ପସନ୍ଦ ସଂରକ୍ଷଣ କରନ୍ତୁ', 'Checking push support…': 'ପୁଶ୍ ସୂଚନା ଯାଞ୍ଚ ହେଉଛି…', 'Enable push notifications': 'ପୁଶ୍ ସୂଚନା ଚାଲୁ କରନ୍ତୁ', 'Turn off push here': 'ଏଠାରେ ପୁଶ୍ ବନ୍ଦ କରନ୍ତୁ', 'Your browser does not offer a direct install prompt. You can continue using QuickWashHub here.': 'ଏହି ବ୍ରାଉଜର୍‌ରେ ସିଧାସଳଖ ଇନଷ୍ଟଲ୍ ବିକଳ୍ପ ନାହିଁ। ଏଠାରୁ QuickWashHub ବ୍ୟବହାର ଜାରି ରଖନ୍ତୁ।',
+  'Quick booking': 'ସହଜ ବୁକିଂ', 'We’ll only ask for details you haven’t saved yet.': 'ଆପଣ ସଂରକ୍ଷଣ କରିନଥିବା ତଥ୍ୟ ମାତ୍ର ପଚରାଯିବ।', '1. Your contact': '୧. ଆପଣଙ୍କ ଯୋଗାଯୋଗ', '2. What needs washing?': '୨. କଣ ଧୋଇବାକୁ ହେବ?', '3. Where should we come?': '୩. ଆମେ କେଉଁଠାକୁ ଆସିବୁ?', 'Name': 'ନାମ', 'Mobile number': 'ମୋବାଇଲ୍ ନମ୍ବର', '10-digit Indian mobile': '୧୦ ଅଙ୍କର ଭାରତୀୟ ମୋବାଇଲ୍', 'Service type': 'ସେବା ପ୍ରକାର', 'Car or bike wash': 'କାର୍ କିମ୍ବା ବାଇକ୍ ଧୋଇବା', 'Solar panel wash · request a quote': 'ସୋଲାର୍ ପ୍ୟାନେଲ୍ · ମୂଲ୍ୟ ଅନୁରୋଧ', 'Your vehicle': 'ଆପଣଙ୍କ ଯାନବାହନ', '+ Add a vehicle': '+ ଯାନବାହନ ଯୋଡ଼ନ୍ତୁ', 'Property type': 'ସମ୍ପତ୍ତି ପ୍ରକାର', 'Residential': 'ଘରୋଇ', 'Commercial': 'ବାଣିଜ୍ୟିକ', 'Approximate panel count': 'ପ୍ୟାନେଲ୍‌ର ଆନୁମାନିକ ସଂଖ୍ୟା', 'Roof type and access details': 'ଛାତର ପ୍ରକାର ଓ ପହଞ୍ଚିବା ବିବରଣୀ', 'Anything else about the installation?': 'ସ୍ଥାପନ ବିଷୟରେ ଅନ୍ୟ କିଛି?', 'Available service': 'ଉପଲବ୍ଧ ସେବା', 'Saved address': 'ସଂରକ୍ଷିତ ଠିକଣା', '+ Add a service address': '+ ସେବା ଠିକଣା ଯୋଡ଼ନ୍ତୁ', 'Nearby directions': 'ନିକଟସ୍ଥ ନିର୍ଦ୍ଦେଶ', 'When should we come?': 'ଆମେ କେବେ ଆସିବୁ?', 'Continue to payment': 'ଦେୟ ପାଇଁ ଆଗକୁ ବଢ଼ନ୍ତୁ', 'Send quote request': 'ମୂଲ୍ୟ ଅନୁରୋଧ ପଠାନ୍ତୁ',
+  'Your next booking is lined up.': 'ଆପଣଙ୍କ ପରବର୍ତ୍ତୀ ବୁକିଂ ପ୍ରସ୍ତୁତ।', 'Pay': 'ଦେୟ କରନ୍ତୁ', 'Cancel': 'ବାତିଲ୍ କରନ୍ତୁ', 'Rate': 'ମୂଲ୍ୟାୟନ କରନ୍ତୁ', 'Finding a worker': 'ସେବାକର୍ମୀ ଖୋଜାଯାଉଛି', 'Assigned': 'ନିଯୁକ୍ତ ହୋଇଛି', 'Worker on the way': 'ସେବାକର୍ମୀ ଆସୁଛନ୍ତି', 'In progress': 'କାମ ଚାଲିଛି', 'Completed': 'ସମ୍ପନ୍ନ', 'Cancelled': 'ବାତିଲ୍', 'Ready to pay': 'ଦେୟ ପାଇଁ ପ୍ରସ୍ତୁତ', 'Quote in review': 'ମୂଲ୍ୟ ଯାଞ୍ଚ ହେଉଛି', 'Quote ready': 'ମୂଲ୍ୟ ପ୍ରସ୍ତୁତ'
+};
+const QWH_ENGLISH = Object.fromEntries(Object.entries(QWH_ODIA).map(([en, or]) => [or, en]));
+let qwhLanguage = 'en';
+function applyQwhLanguage(rootNode = document.body) {
+  const map = qwhLanguage === 'or' ? QWH_ODIA : QWH_ENGLISH;
+  const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const trimmed = node.nodeValue.trim();
+    if (qwhLanguage === 'or' && trimmed.startsWith('Hello, ')) node.nodeValue = node.nodeValue.replace('Hello, ', 'ନମସ୍କାର, ');
+    else if (qwhLanguage === 'en' && trimmed.startsWith('ନମସ୍କାର, ')) node.nodeValue = node.nodeValue.replace('ନମସ୍କାର, ', 'Hello, ');
+    else if (map[trimmed]) node.nodeValue = node.nodeValue.replace(trimmed, map[trimmed]);
+  }
+  rootNode.querySelectorAll?.('[placeholder],[aria-label],[title]').forEach(element => {
+    for (const attribute of ['placeholder', 'aria-label', 'title']) if (element.hasAttribute(attribute) && map[element.getAttribute(attribute)]) element.setAttribute(attribute, map[element.getAttribute(attribute)]);
+  });
+  document.documentElement.lang = qwhLanguage;
+}
+try { qwhLanguage = localStorage.getItem('quickwashhub:language') === 'or' ? 'or' : 'en'; } catch {}
+const languageChoice = document.querySelector('#language-choice');
+if (languageChoice) {
+  languageChoice.value = qwhLanguage;
+  languageChoice.addEventListener('change', () => { qwhLanguage = languageChoice.value === 'or' ? 'or' : 'en'; try { localStorage.setItem('quickwashhub:language', qwhLanguage); } catch {} applyQwhLanguage(); });
+}
+new MutationObserver(() => applyQwhLanguage()).observe(document.body, { childList: true, subtree: true });
+applyQwhLanguage();
+
 const previousAdminView = adminView;
 adminView = function () {
   if (view === 'Zones & pricing') return zonesPage();
   if (view === 'Services') return servicesPage();
   if (view === 'Workers') return workersPage();
+  if (view === 'Security') return heading('Admin security', 'Protect operations access with an authenticator app.') + '<section id="admin-mfa-state">Loading security settings…</section>';
   return previousAdminView();
 };
 
@@ -17,9 +55,29 @@ loadAdminSection = async function () {
   if (view === 'Zones & pricing') return loadZonesPage();
   if (view === 'Services') return loadServicesPage();
   if (view === 'Workers') return loadWorkersPage();
+  if (view === 'Security') return loadAdminSecurity();
   if (view === 'Support desk' && me?.role === 'ADMIN') return loadSupportDesk();
   return previousLoadAdminSection();
 };
+
+async function loadAdminSecurity() {
+  const state = document.querySelector('#admin-mfa-state');
+  async function refresh() {
+    const status = await api('/api/v1/admin/security/mfa');
+    state.innerHTML = status.enabled
+      ? panel('Authenticator MFA is on', '<p>Admin sign-ins require a current six-digit code from your authenticator app.</p><form id="mfa-disable-form" class="formrow"><label class="field"><span>Authenticator code to turn off MFA</span><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label><button class="secondary">Turn off MFA</button></form>')
+      : panel('Protect this admin account', '<p>Use an authenticator app such as Google Authenticator, Microsoft Authenticator, or 1Password. Setup requires your sign-in to continue on this device.</p><button class="primary" id="mfa-setup">Set up authenticator MFA</button>');
+    document.querySelector('#mfa-setup')?.addEventListener('click', async () => {
+      try {
+        const setup = await api('/api/v1/admin/security/mfa/setup', { method: 'POST', body: JSON.stringify({}) });
+        state.innerHTML = panel('Add QuickWashHub to your authenticator', '<p>In your authenticator app, add an account manually using this secret. It expires in 10 minutes.</p><label class="field"><span>Setup key</span><input readonly value="' + esc(setup.secret) + '" onclick="this.select()"></label><p class="fine">Account URI: <code>' + esc(setup.otpauthUrl) + '</code></p><form id="mfa-confirm-form" class="formrow"><label class="field"><span>Six-digit code from the app</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label><button class="primary">Confirm and enable MFA</button></form>');
+        document.querySelector('#mfa-confirm-form').onsubmit = async event => { event.preventDefault(); try { await api('/api/v1/admin/security/mfa/confirm', { method: 'POST', body: JSON.stringify({ code: event.currentTarget.elements.code.value }) }); await refresh(); toast('Admin MFA enabled.'); } catch (error) { toast(error.message); } };
+      } catch (error) { toast(error.message); }
+    });
+    document.querySelector('#mfa-disable-form')?.addEventListener('submit', async event => { event.preventDefault(); try { await api('/api/v1/admin/security/mfa/disable', { method: 'POST', body: JSON.stringify({ code: event.currentTarget.elements.code.value }) }); await refresh(); toast('Admin MFA disabled.'); } catch (error) { toast(error.message); } });
+  }
+  try { await refresh(); } catch (error) { state.innerHTML = panel('Security settings unavailable', '<p>' + esc(error.message) + '</p>'); }
+}
 
 const previousCustomerView = customerView;
 customerView = function () {
@@ -45,6 +103,12 @@ nav = function () {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'navlink' + (view === label ? ' active' : ''); button.dataset.extraNav = 'support';
       button.innerHTML = '<span class="nav-icon" aria-hidden="true">?</span><span class="nav-label">' + label + '</span>';
       button.onclick = () => { view = label; render(); }; container.append(button);
+    }
+    if (me.role === 'ADMIN') for (const container of [document.querySelector('#nav'), document.querySelector('#mobile-nav')]) {
+      if (!container || container.querySelector('[data-extra-nav="security"]')) continue;
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'navlink' + (view === 'Security' ? ' active' : ''); button.dataset.extraNav = 'security';
+      button.innerHTML = '<span class="nav-icon" aria-hidden="true">◈</span><span class="nav-label">Security</span>';
+      button.onclick = () => { view = 'Security'; render(); }; container.append(button);
     }
   }
 };
@@ -176,6 +240,7 @@ function zonesPage() {
     panel('Create or edit zone', '<form id="zone-form" class="zone-editor">' +
       '<label class="field"><span>Zone name</span><input name="name" placeholder="Cuttack 42 Mouza" required maxlength="100"></label>' +
       '<label class="field"><span>Base commission (%)</span><input name="baseCommissionPct" type="number" min="0" max="100" step="0.1" value="20" required></label>' +
+      '<label class="field"><span>Minimum contribution after coupon (%)</span><input name="couponMinimumContributionPct" type="number" min="0" max="20" step="0.1" value="1" required><small class="form-help">Coupons stop at the zone margin left after partner payout and payment fees.</small></label>' +
       '<div class="zone-map-toolbar"><label class="field"><span>Coverage radius (km)</span><input name="radiusKm" id="zone-radius" type="number" min="0.25" max="30" step="0.25" value="3" required></label>' +
       '<button class="secondary" id="zone-use-location" type="button">◎ Use my location</button><span id="zone-center-status" class="fine">Click the map to place the zone center.</span></div>' +
       '<div id="admin-zone-map" role="application" aria-label="Choose a circular service zone on the map"></div>' +
@@ -192,7 +257,7 @@ async function loadZonesPage() {
   document.querySelector('#zones-state').innerHTML = panel('Configured service zones', zones.map(z =>
     '<div class="row"><div class="info"><strong>' + esc(z.name) + '</strong><small>' +
     (z.radiusKm ? esc(z.radiusKm) + ' km radius' : 'Old polygon zone · choose a center and radius to edit') +
-    ' · ' + esc(z.baseCommissionPct) + '% commission · ' + (z.isActive ? 'active' : 'inactive') +
+    ' · ' + esc(z.baseCommissionPct) + '% commission · ' + esc(z.couponMinimumContributionPct ?? 1) + '% minimum contribution · ' + (z.isActive ? 'active' : 'inactive') +
     '</small></div><button class="secondary" data-zone-edit="' + esc(z.id) + '">Edit map</button>' +
     '<button class="secondary" data-zone-toggle="' + esc(z.id) + '" data-active="' + z.isActive + '">' +
     (z.isActive ? 'Deactivate' : 'Activate') + '</button></div>').join('')) +
@@ -221,7 +286,7 @@ async function loadZonesPage() {
     event.preventDefault(); event.stopImmediatePropagation();
     const centerLat = Number(form.elements.centerLat.value), centerLng = Number(form.elements.centerLng.value);
     if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng)) return toast('Click the map to choose a zone center.');
-    const payload = { name: form.elements.name.value, baseCommissionPct: Number(form.elements.baseCommissionPct.value), centerLat, centerLng, radiusKm: Number(form.elements.radiusKm.value) };
+    const payload = { name: form.elements.name.value, baseCommissionPct: Number(form.elements.baseCommissionPct.value), couponMinimumContributionPct: Number(form.elements.couponMinimumContributionPct.value), centerLat, centerLng, radiusKm: Number(form.elements.radiusKm.value) };
     try {
       await api(adminZoneEditingId ? '/api/v1/admin/zones/' + encodeURIComponent(adminZoneEditingId) : '/api/v1/admin/zones', {
         method: adminZoneEditingId ? 'PATCH' : 'POST', body: JSON.stringify(payload)
@@ -233,7 +298,7 @@ async function loadZonesPage() {
   document.querySelectorAll('[data-zone-edit]').forEach(button => button.onclick = () => {
     const zone = zones.find(item => item.id === button.dataset.zoneEdit); if (!zone) return;
     adminZoneEditingId = zone.id; form.elements.name.value = zone.name;
-    form.elements.baseCommissionPct.value = String(zone.baseCommissionPct); radius.value = String(zone.radiusKm || 3);
+    form.elements.baseCommissionPct.value = String(zone.baseCommissionPct); form.elements.couponMinimumContributionPct.value = String(zone.couponMinimumContributionPct ?? 1); radius.value = String(zone.radiusKm || 3);
     document.querySelector('#zone-save').textContent = 'Save zone';
     document.querySelector('#zone-cancel-edit').classList.remove('hidden');
     setAdminZoneCenter(zone.centerLat ?? 20.4625, zone.centerLng ?? 85.883, true);

@@ -92,6 +92,11 @@ model User {
   role            Role            @default(CUSTOMER)
   isActive        Boolean         @default(true)
   createdAt       DateTime        @default(now())
+  marketingConsentAt DateTime?
+  marketingConsentRevokedAt DateTime?
+  adminMfaSecretEnc String?
+  adminMfaPendingSecretEnc String?
+  adminMfaPendingExpiresAt DateTime?
   vehicles        Vehicle[]
   addresses       Address[]
   bookings        Booking[]
@@ -101,6 +106,8 @@ model User {
   authChallenges  AuthChallenge[]
   supportTickets  SupportTicket[]
   deletionRequests AccountDeletionRequest[]
+  coupons         Coupon[]
+  pushSubscriptions PushSubscription[]
 }
 
 model AuthChallenge {
@@ -145,6 +152,7 @@ model Vehicle {
   model      String
   number     String
   bookings   Booking[]
+  bookingItems BookingVehicle[]
 }
 
 model Address {
@@ -165,6 +173,7 @@ model Zone {
   name              String
   isActive          Boolean      @default(true)
   baseCommissionPct Float        @default(20)
+  couponMinimumContributionPct Float @default(1)
   polygon           Json?
   centerLat         Float?
   centerLng         Float?
@@ -174,6 +183,7 @@ model Zone {
   workers           WorkerZone[]
   bookings          Booking[]
   campaigns         Campaign[]
+  coupons           Coupon[]
 }
 
 model Service {
@@ -185,6 +195,7 @@ model Service {
   isActive    Boolean     @default(true)
   prices      ZonePrice[]
   bookings    Booking[]
+  bookingItems BookingVehicle[]
 }
 
 model ZonePrice {
@@ -229,7 +240,10 @@ model Booking {
   commissionAmt Int
   workerEarning Int
   startOtpHash  String?
+  couponCode    String?
+  couponDiscount Int @default(0)
   createdAt     DateTime       @default(now())
+  completedAt   DateTime?
   customer      User           @relation(fields: [customerId], references: [id])
   worker        Worker?        @relation(fields: [workerId], references: [id])
   zone          Zone           @relation(fields: [zoneId], references: [id])
@@ -241,6 +255,21 @@ model Booking {
   rating        Rating?
   walletEntries WalletLedger[]
   supportTickets SupportTicket[]
+  vehicleItems   BookingVehicle[]
+}
+
+model BookingVehicle {
+  id        String @id @default(cuid())
+  bookingId String
+  vehicleId String
+  serviceId String
+  price     Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([bookingId, vehicleId])
+  @@index([vehicleId])
 }
 
 model BookingPhoto {
@@ -265,8 +294,31 @@ model Payment {
   paymentSessionId String?
   splitStatus String @default("NOT_READY")
   splitUpdatedAt DateTime?
+  refundedAmount Int @default(0)
+  reconciliationSnapshot Json?
+  reconciledAt DateTime?
   paidAt DateTime?
   booking    Booking       @relation(fields: [bookingId], references: [id])
+  refunds    CashfreeRefund[]
+}
+
+model CashfreeRefund {
+  id             String   @id @default(cuid())
+  paymentId      String
+  idempotencyKey String   @unique
+  refundId       String   @unique
+  amount         Int
+  reason         String
+  workerAdjustment Int @default(0)
+  status         String   @default("INITIATING")
+  cashfreeRefundId String?
+  statusDescription String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  payment        Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, createdAt])
+  @@index([status, updatedAt])
 }
 
 model WalletLedger {
@@ -302,6 +354,56 @@ model Campaign {
   surgePct          Float    @default(0)
   tempWorkersNeeded Int      @default(0)
   zone              Zone     @relation(fields: [zoneId], references: [id])
+}
+
+model Coupon {
+  id          String   @id @default(cuid())
+  userId      String
+  zoneId      String?
+  code        String   @unique
+  trigger     String
+  discountPct Float
+  expiresAt   DateTime
+  redeemedAt  DateTime?
+  bookingId   String?  @unique
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone        Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@index([userId, expiresAt, redeemedAt])
+  @@index([trigger, createdAt])
+  @@unique([userId, trigger])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  keys      Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model NotificationDelivery {
+  id            String   @id @default(cuid())
+  userId        String?
+  bookingId     String?
+  channel       String
+  recipient     String
+  template      String
+  payload       Json
+  dedupeKey     String   @unique
+  status        String   @default("PENDING")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  sentAt        DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([bookingId, channel])
 }
 
 model Rating {
