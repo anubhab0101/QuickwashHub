@@ -428,7 +428,7 @@ app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_re
     db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
     db.zonePrice.findMany({ where: { zone: { isActive: true, ...pilotZoneWhere }, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
     db.service.findMany({ where: { category: { in: ['SOLAR', 'HOME'] } } }),
-    db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true } })
+    db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true, polygon: true } })
   ]);
   const solarServices = additionalServices.filter(function (service) { return service.category === 'SOLAR' && service.isActive; });
   const homeServices = additionalServices.filter(function (service) { return service.category === 'HOME'; });

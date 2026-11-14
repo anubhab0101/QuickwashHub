@@ -16,6 +16,13 @@ const QWH_ODIA = {
   'Quick booking': 'ସହଜ ବୁକିଂ', 'We’ll only ask for details you haven’t saved yet.': 'ଆପଣ ସଂରକ୍ଷଣ କରିନଥିବା ତଥ୍ୟ ମାତ୍ର ପଚରାଯିବ।', '1. Your contact': '୧. ଆପଣଙ୍କ ଯୋଗାଯୋଗ', '2. What needs washing?': '୨. କଣ ଧୋଇବାକୁ ହେବ?', '3. Where should we come?': '୩. ଆମେ କେଉଁଠାକୁ ଆସିବୁ?', 'Name': 'ନାମ', 'Mobile number': 'ମୋବାଇଲ୍ ନମ୍ବର', '10-digit Indian mobile': '୧୦ ଅଙ୍କର ଭାରତୀୟ ମୋବାଇଲ୍', 'Service type': 'ସେବା ପ୍ରକାର', 'Car or bike wash': 'କାର୍ କିମ୍ବା ବାଇକ୍ ଧୋଇବା', 'Solar panel wash · request a quote': 'ସୋଲାର୍ ପ୍ୟାନେଲ୍ · ମୂଲ୍ୟ ଅନୁରୋଧ', 'Your vehicle': 'ଆପଣଙ୍କ ଯାନବାହନ', '+ Add a vehicle': '+ ଯାନବାହନ ଯୋଡ଼ନ୍ତୁ', 'Property type': 'ସମ୍ପତ୍ତି ପ୍ରକାର', 'Residential': 'ଘରୋଇ', 'Commercial': 'ବାଣିଜ୍ୟିକ', 'Approximate panel count': 'ପ୍ୟାନେଲ୍‌ର ଆନୁମାନିକ ସଂଖ୍ୟା', 'Roof type and access details': 'ଛାତର ପ୍ରକାର ଓ ପହଞ୍ଚିବା ବିବରଣୀ', 'Anything else about the installation?': 'ସ୍ଥାପନ ବିଷୟରେ ଅନ୍ୟ କିଛି?', 'Available service': 'ଉପଲବ୍ଧ ସେବା', 'Saved address': 'ସଂରକ୍ଷିତ ଠିକଣା', '+ Add a service address': '+ ସେବା ଠିକଣା ଯୋଡ଼ନ୍ତୁ', 'Nearby directions': 'ନିକଟସ୍ଥ ନିର୍ଦ୍ଦେଶ', 'When should we come?': 'ଆମେ କେବେ ଆସିବୁ?', 'Continue to payment': 'ଦେୟ ପାଇଁ ଆଗକୁ ବଢ଼ନ୍ତୁ', 'Send quote request': 'ମୂଲ୍ୟ ଅନୁରୋଧ ପଠାନ୍ତୁ',
   'Your next booking is lined up.': 'ଆପଣଙ୍କ ପରବର୍ତ୍ତୀ ବୁକିଂ ପ୍ରସ୍ତୁତ।', 'Pay': 'ଦେୟ କରନ୍ତୁ', 'Cancel': 'ବାତିଲ୍ କରନ୍ତୁ', 'Rate': 'ମୂଲ୍ୟାୟନ କରନ୍ତୁ', 'Finding a worker': 'ସେବାକର୍ମୀ ଖୋଜାଯାଉଛି', 'Assigned': 'ନିଯୁକ୍ତ ହୋଇଛି', 'Worker on the way': 'ସେବାକର୍ମୀ ଆସୁଛନ୍ତି', 'In progress': 'କାମ ଚାଲିଛି', 'Completed': 'ସମ୍ପନ୍ନ', 'Cancelled': 'ବାତିଲ୍', 'Ready to pay': 'ଦେୟ ପାଇଁ ପ୍ରସ୍ତୁତ', 'Quote in review': 'ମୂଲ୍ୟ ଯାଞ୍ଚ ହେଉଛି', 'Quote ready': 'ମୂଲ୍ୟ ପ୍ରସ୍ତୁତ'
 };
+Object.assign(QWH_ODIA, {
+  'CAR CARE': 'କାର୍ ସେବା', 'BIKE CARE': 'ବାଇକ୍ ସେବା', 'SOLAR PANEL CARE': 'ସୋଲାର୍ ପ୍ୟାନେଲ୍ ସେବା',
+  'Free site quote': 'ସ୍ଥାନ ଯାଞ୍ଚ ପରେ ମାଗଣା ମୂଲ୍ୟ', 'Residential or commercial · priced after site inspection': 'ଘରୋଇ କିମ୍ବା ବାଣିଜ୍ୟିକ · ସ୍ଥାନ ଯାଞ୍ଚ ପରେ ମୂଲ୍ୟ',
+  'Book now': 'ଏବେ ବୁକ୍ କରନ୍ତୁ', 'Request a quote': 'ମୂଲ୍ୟ ଅନୁରୋଧ କରନ୍ତୁ', 'COMING LATER': 'ପରେ ଆସିବ',
+  'We are preparing this service for your area.': 'ଆପଣଙ୍କ ଅଞ୍ଚଳ ପାଇଁ ଏହି ସେବା ପ୍ରସ୍ତୁତ ହେଉଛି।',
+  'This pin is outside the active service zones. Try another location or a saved address.': 'ଏହି ସ୍ଥାନ ସକ୍ରିୟ ସେବା ଅଞ୍ଚଳ ବାହାରେ। ଅନ୍ୟ ସ୍ଥାନ କିମ୍ବା ସଂରକ୍ଷିତ ଠିକଣା ବାଛନ୍ତୁ।'
+});
 const QWH_ENGLISH = Object.fromEntries(Object.entries(QWH_ODIA).map(([en, or]) => [or, en]));
 let qwhLanguage = 'en';
 function applyQwhLanguage(rootNode = document.body) {
@@ -86,13 +93,20 @@ customerView = function () {
   if (view !== 'Overview') return previousCustomerView();
   const next = bookings.find(b => !['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(b.status));
   const active = visibleCustomerServices(catalog.services).filter(s => s.category !== 'HOME');
-  const cards = active.map(s => '<article class="simple-service"><div><span class="service-symbol">' + (s.category === 'SOLAR' ? '☼' : s.vehicleType === 'BIKE' ? '◈' : '◇') + '</span><strong>' + esc(s.name) + '</strong></div><small>' + (s.category === 'SOLAR' ? 'Residential or commercial · quote after site inspection' : esc(s.vehicleType) + ' · ' + s.durationMin + ' min') + ' · ' + esc(s.zoneName) + '</small><b>' + (s.category === 'SOLAR' ? 'Request quote' : money(s.price)) + '</b></article>').join('');
+  const cards = active.map(s => {
+    const solar = s.category === 'SOLAR';
+    const type = solar ? 'SOLAR PANEL CARE' : s.vehicleType === 'BIKE' ? 'BIKE CARE' : 'CAR CARE';
+    const icon = solar ? '☀' : s.vehicleType === 'BIKE' ? '◉' : '▰';
+    const price = solar ? 'Free site quote' : money(s.price);
+    const detail = solar ? 'Residential or commercial · priced after site inspection' : esc(s.durationMin) + ' min · ' + esc(s.zoneName);
+    return '<article class="customer-service-card"><div class="customer-service-top"><span class="customer-service-icon" aria-hidden="true">' + icon + '</span><span class="customer-service-kind">' + type + '</span></div><h4>' + esc(s.name) + '</h4><p class="customer-service-detail">' + detail + '</p><div class="customer-service-bottom"><strong>' + price + '</strong><button class="service-book-button" type="button" data-book>' + (solar ? 'Request a quote' : 'Book now') + '<span aria-hidden="true"> →</span></button></div></article>';
+  }).join('');
   return heading('Hello, ' + (me.name || 'there'), 'Book a convenient car, bike, or solar-panel wash.', '<button class="primary" data-book>Book a wash →</button>') +
     '<section class="simple-dashboard"><div class="simple-main">' + panel('Your next booking', next ? bookingRows([next]) : '<div class="empty-state"><b>No booking yet</b>Choose a service and book in a few steps.</div>') +
     '<div class="quick-links"><button class="secondary" data-nav="Vehicles">My vehicles</button><button class="secondary" data-nav="Addresses">My addresses</button><button class="secondary" data-nav="Support">Get help</button></div>' +
     (bookings.length > 1 ? panel('Recent bookings', bookingRows(bookings.filter(b => b !== next).slice(0, 3))) : '') +
     '</div><aside class="simple-services">' + panel('Services in your area', cards || '<p class="fine">Services are being set up for your zone.</p>') +
-    '<article class="simple-service disabled-service"><div><span class="service-symbol">⌂</span><strong>Home Wash</strong></div><small>Coming later</small><b>Not available yet</b></article></aside></section>';
+    '<article class="customer-service-card home-service-card"><div class="customer-service-top"><span class="customer-service-icon" aria-hidden="true">⌂</span><span class="customer-service-kind">COMING LATER</span></div><h4>Home Wash</h4><p class="customer-service-detail">We are preparing this service for your area.</p><div class="customer-service-bottom"><strong>Not available yet</strong></div></article></aside></section>';
 };
 const previousNavigation = nav;
 nav = function () {
