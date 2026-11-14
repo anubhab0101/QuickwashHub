@@ -9,7 +9,9 @@ environment settings. Do not paste credentials into GitHub, issues, logs, or
 screenshots. Rotate any credentials that have been exposed.
 
 The production start command runs `prisma migrate deploy` before starting the
-HTTP server. The migration CLI and `prisma.config.ts` are included in the
+HTTP server. For TiDB Cloud hosts, `prisma.config.ts` enforces
+`sslaccept=strict` for migration connections; application queries also use TLS.
+The migration CLI and `prisma.config.ts` are included in the
 runtime image. A failed migration prevents the app from serving traffic. Ensure
 Render uses the Dockerfile deployment path or the `npm start` command; do not
 override it with `node dist/src/server.js`.
