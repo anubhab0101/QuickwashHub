@@ -43,7 +43,7 @@ The first admin uses the map to set circular service zones, then creates service
 - `INITIAL_ADMIN_EMAIL`: only needed for one-time admin bootstrap.
 - `TRUST_PROXY=true`: only behind one trusted reverse proxy.
 
-After deployment, monitor `https://YOUR_API_HOST/health` (database readiness). Build with `npm run build`, run `npm run db:migrate` as a migration step, then start with `npm start`. Configure TLS, domain, backups, monitoring and restore drills on the host.
+After deployment, monitor `https://YOUR_API_HOST/health` (database and core-schema readiness). Build with `npm run build`; `npm start` applies pending MySQL migrations before starting the server. Configure TLS, domain, backups, monitoring and restore drills on the host. See [deployment](docs/DEPLOYMENT.md), [architecture](docs/ARCHITECTURE.md), and [security and privacy operations](docs/SECURITY.md).
 
 ## Offers, push and WhatsApp
 
@@ -74,4 +74,4 @@ Money uses integer paise. The browser payment response alone does not confirm a 
 
 ## Before accepting real customers
 
-This is an MVP foundation, not launch certification. Before paid public bookings, verify the exact 42 Mouza circles, complete Cashfree PG and Easy Split approval/vendor onboarding, obtain CA/legal/tax review, publish correct business/grievance details, and complete the end-to-end staging checks. Refund execution and settlement reconciliation still need operator validation in the Cashfree merchant account; manual UTR payouts remain for historical/non-split flows. Production startup fails closed when pilot, payment, map, private-storage, or legal-contact gates are missing.
+This is an MVP foundation, not launch certification or a claim of DPDP compliance. Before paid public bookings, verify the exact 42 Mouza circles, complete Cashfree PG and Easy Split approval/vendor onboarding, obtain CA/legal/tax review, publish correct business/grievance details and a data retention schedule, and complete the end-to-end staging checks. Refund execution and settlement reconciliation still need operator validation in the Cashfree merchant account; manual UTR payouts remain for historical/non-split flows. Production startup fails closed when pilot, payment, map, private-storage, or legal-contact gates are missing. Review DPDP implementation readiness with Indian counsel; applicable provisions have phased commencement.

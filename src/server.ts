@@ -115,8 +115,13 @@ const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 600, standardHea
 app.use('/api/v1', apiLimiter);
 
 app.get('/health', async function (_req, res) {
-  try { await db.$queryRaw`SELECT 1`; res.json({ status: 'ok', checks: { database: 'ok' } }); }
-  catch { res.status(503).json({ status: 'error', checks: { database: 'unavailable' } }); }
+  try {
+    await db.$queryRaw`SELECT 1`;
+    const tables = await db.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('User', 'AuthSession', 'Booking', 'NotificationDelivery')`;
+    const schemaReady = Number(tables[0]?.count || 0) === 4;
+    if (!schemaReady) return res.status(503).json({ status: 'error', checks: { database: 'ok', schema: 'incomplete', requiredTables: ['User', 'AuthSession', 'Booking', 'NotificationDelivery'] } });
+    res.json({ status: 'ok', checks: { database: 'ok', schema: 'ok' } });
+  } catch { res.status(503).json({ status: 'error', checks: { database: 'unavailable', schema: 'unknown' } }); }
 });
 app.get('/api/v1', function (_req, res) { res.json({ name: 'QuickWashHub Car & Bike Wash API', version: 'v1' }); });
 app.get('/api/v1/auth/config', function (_req, res) { res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null }); });
@@ -385,16 +390,24 @@ app.post('/api/v1/auth/password-reset/confirm', challengeLimiter, async function
 app.post('/api/v1/auth/google', challengeLimiter, async function (req, res) {
   const p = z.object({ credential: z.string().min(20).max(5000) }).safeParse(req.body);
   if (!p.success || !process.env.GOOGLE_CLIENT_ID) return res.status(400).json({ error: 'Google sign-in is not configured.' });
+  let payload: { email?: string; email_verified?: boolean; name?: string } | undefined;
   try {
     const ticket = await googleClient.verifyIdToken({ idToken: p.data.credential, audience: process.env.GOOGLE_CLIENT_ID });
-    const payload = ticket.getPayload();
+    payload = ticket.getPayload();
     if (!payload?.email || payload.email_verified !== true) return res.status(401).json({ error: 'Google account email is not verified.' });
-    const email = payload.email.toLowerCase();
+  } catch (error) { console.error('Google credential validation failed', error); return res.status(401).json({ error: 'Google sign-in failed. Try again.' }); }
+  try {
+    const email = payload.email!.toLowerCase();
     let user = await db.user.findUnique({ where: { email } });
     if (!user) user = await db.user.create({ data: { email, name: payload.name || null, emailVerifiedAt: new Date(), role: Role.CUSTOMER } });
     else if (!user.emailVerifiedAt) user = await db.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date(), name: user.name || payload.name || null } });
     await finishSignIn(user, res);
-  } catch (error) { if (res.headersSent) return; console.error('Google credential validation failed', error); res.status(401).json({ error: 'Google sign-in failed. Try again.' }); }
+  } catch (error) {
+    console.error('Google sign-in account/session persistence failed', error);
+    const code = (error as { code?: string })?.code;
+    if (code === 'P2021' || code === 'P2022') return res.status(503).json({ error: 'Account service database schema is incomplete. Please retry after service recovery.' });
+    if (!res.headersSent) res.status(500).json({ error: 'Could not finish sign-in. Please try again shortly.' });
+  }
 });
 app.post('/api/v1/auth/logout', async function (req, res) {
   const token = getCookie(req);
