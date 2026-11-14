@@ -23,6 +23,14 @@ Object.assign(QWH_ODIA, {
   'We are preparing this service for your area.': 'ଆପଣଙ୍କ ଅଞ୍ଚଳ ପାଇଁ ଏହି ସେବା ପ୍ରସ୍ତୁତ ହେଉଛି।',
   'This pin is outside the active service zones. Try another location or a saved address.': 'ଏହି ସ୍ଥାନ ସକ୍ରିୟ ସେବା ଅଞ୍ଚଳ ବାହାରେ। ଅନ୍ୟ ସ୍ଥାନ କିମ୍ବା ସଂରକ୍ଷିତ ଠିକଣା ବାଛନ୍ତୁ।'
 });
+Object.assign(QWH_ODIA, {
+  'Choose an address suggestion or pin your location. We’ll check it before saving.': 'ଠିକଣା ବାଛନ୍ତୁ କିମ୍ବା ସ୍ଥାନରେ ପିନ୍ କରନ୍ତୁ। ସଂରକ୍ଷଣ ପୂର୍ବରୁ ଯାଞ୍ଚ ହେବ।',
+  'Search for your road, building or locality': 'ରାସ୍ତା, କୋଠା କିମ୍ବା ଅଞ୍ଚଳ ଖୋଜନ୍ତୁ', 'Verify address and save →': 'ଠିକଣା ଯାଞ୍ଚ କରି ସଂରକ୍ଷଣ କରନ୍ତୁ →',
+  'Address selected. Add your nearby landmark, then verify and save.': 'ଠିକଣା ବଛାଯାଇଛି। ନିକଟସ୍ଥ ଚିହ୍ନ ଯୋଡ଼ି ଯାଞ୍ଚ କରି ସଂରକ୍ଷଣ କରନ୍ତୁ।',
+  'Address verified. Checking your service zone…': 'ଠିକଣା ଯାଞ୍ଚ ହୋଇଛି। ସେବା ଜୋନ୍ ଯାଞ୍ଚ ହେଉଛି…',
+  'Address checked. The pin and landmark will guide the wash partner to the exact point.': 'ଠିକଣା ଯାଞ୍ଚ ହୋଇଛି। ପିନ୍ ଓ ନିକଟସ୍ଥ ଚିହ୍ନ ସେବାକର୍ମୀଙ୍କୁ ସଠିକ୍ ସ୍ଥାନ ଦେଖାଇବ।',
+  'This pin is outside the active service zones. Try another location or a saved address.': 'ଏହି ପିନ୍ ସକ୍ରିୟ ସେବା ଜୋନ୍ ବାହାରେ। ଅନ୍ୟ ସ୍ଥାନ କିମ୍ବା ସଂରକ୍ଷିତ ଠିକଣା ବାଛନ୍ତୁ।'
+});
 const QWH_ENGLISH = Object.fromEntries(Object.entries(QWH_ODIA).map(([en, or]) => [or, en]));
 let qwhLanguage = 'en';
 function applyQwhLanguage(rootNode = document.body) {
