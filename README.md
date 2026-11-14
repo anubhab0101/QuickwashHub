@@ -1,21 +1,21 @@
 # QuickWashHub car and bike wash platform
 
-A responsive booking and operations website with PostgreSQL-backed accounts and bookings. There are no demo accounts or browser-only booking records. Sign in with verified email/password or Google. Twilio is not used.
+A responsive booking and operations website with MySQL/TiDB-backed accounts and bookings. There are no demo accounts or browser-only booking records. Sign in with verified email/password or Google. Twilio is not used.
 
 ## Run locally
 
-Requirements: Node.js 22.12+, PostgreSQL 16+, a Resend account for verification/reset emails, and a Google OAuth web client for Google sign-in.
+Requirements: Node.js 22.12+, a MySQL-compatible database (TiDB Cloud MySQL protocol is supported), a Resend account for verification/reset emails, and a Google OAuth web client for Google sign-in.
 
 1. Copy `.env.example` to `.env` and set `DATABASE_URL` and a private `AUTH_TOKEN_SECRET` of at least 32 random characters.
 2. Configure Resend sender details (`RESEND_API_KEY`, `EMAIL_FROM`) and Google OAuth (`GOOGLE_CLIENT_ID`). For Google Cloud, create a Web application OAuth client and add the local site URL `http://localhost:4000` to its authorized JavaScript origins.
-3. Start local dependencies using `docker compose up -d` if Docker is installed. Otherwise point `DATABASE_URL` at PostgreSQL and use private S3-compatible storage for photo uploads.
+3. Point `DATABASE_URL` at a dedicated MySQL/TiDB database with TLS enabled and use private S3-compatible storage for photo uploads.
 4. Run `npm install`, `npm run db:generate`, and `npm run db:migrate`.
 5. Set `INITIAL_ADMIN_EMAIL` to your operator email and run `npm run db:bootstrap-admin` once. That account can activate using email registration/verification or Google sign-in with the same address.
 6. Run `npm run dev` and open `http://localhost:4000`.
 
 Run `npm test` for the local authenticator/MFA unit checks. The payment, email, map, push and database migration flows still need staging credentials for end-to-end verification.
 
-Production admin operations require authenticator-app MFA. Sign in, open **Security**, add the displayed setup key to an authenticator, and confirm its six-digit code. The TOTP secret is encrypted in PostgreSQL using a key derived from `AUTH_TOKEN_SECRET`; changing that secret later requires admins to enroll MFA again. Keep your authenticator app's account recovery options available before changing devices.
+Production admin operations require authenticator-app MFA. Sign in, open **Security**, add the displayed setup key to an authenticator, and confirm its six-digit code. The TOTP secret is encrypted in the database using a key derived from `AUTH_TOKEN_SECRET`; changing that secret later requires admins to enroll MFA again. Keep your authenticator app's account recovery options available before changing devices.
 
 QuickWashHub is installable as a Progressive Web App in browsers that support the native install prompt. The app shell is cached for offline loading; account data, bookings, and payments still require a network connection. On a customer's first signed-in visit, the app shows a one-time install invitation. Safari on iPhone does not expose the same native install prompt, so the UI does not display manual installation steps there.
 
@@ -25,7 +25,7 @@ The first admin uses the map to set circular service zones, then creates service
 
 ## Environment
 
-- `DATABASE_URL`, `DB_POOL_MAX`: PostgreSQL connection and pool size.
+- `DATABASE_URL`, `DB_POOL_MAX`: MySQL/TiDB TLS connection and pool size. The URL must use `mysql://` and name an application database (for example `quickwashhub`), never a system schema such as `sys`.
 - `AUTH_TOKEN_SECRET`: unique random secret with at least 32 characters.
 - `CORS_ORIGIN`: exact website origin(s); HTTPS in production.
 - `RESEND_API_KEY`, `EMAIL_FROM`: Resend API key and verified sender for verification/reset messages.
@@ -55,15 +55,13 @@ After deployment, monitor `https://YOUR_API_HOST/health` (database readiness). B
 - Promotional WhatsApp messages require a business messaging provider and an approved template. Configure `WHATSAPP_MARKETING_SEND_URL`, `WHATSAPP_MARKETING_TOKEN`, and `WHATSAPP_MARKETING_TEMPLATE` for that provider. This endpoint receives JSON `{to, templateName, language, variables}` with a bearer token. Do not send customer promotions through a personal/session WhatsApp connection.
 - Resend emails now use a branded HTML template. Keep `EMAIL_FROM` on a verified sender domain and set `PUBLIC_APP_URL` so buttons and unsubscribe links use the deployed website.
 
-## PostgreSQL to TiDB migration
+## PostgreSQL to TiDB MySQL migration
 
-The application continues to use `DATABASE_URL`; the migration utility does not change it. Keep the current source as `SOURCE_DATABASE_URL` and put the newly rotated TiDB connection string, with a real database name, in the uncommitted environment as `TIDB_DATABASE_URL`. Never reuse the password visible in the shared screenshot.
+The app now uses the MySQL protocol with TiDB. Keep the old PostgreSQL source in the ignored `.env` as `SOURCE_DATABASE_URL`; set both `DATABASE_URL` and `TIDB_DATABASE_URL` to a TiDB URL with a dedicated application database, such as `/quickwashhub`. Do not point the app at `/sys` or another system schema. Rotate any password shared in chat before production use.
 
-Do not cut over production to TiDB PostgreSQL Starter based on URL compatibility alone. PingCAP currently labels this mode a public preview intended for development and evaluation, not production workloads. Its `SERIALIZABLE` requests are downgraded to `REPEATABLE READ`; payout ledger operations therefore use explicit worker-row locks and `READ COMMITTED`, but still require concurrency testing on the actual target. [TiDB PostgreSQL compatibility](https://docs.pingcap.com/tidbcloud/postgresql-compatibility/) · [TiDB PostgreSQL preview FAQ](https://docs.pingcap.com/tidbcloud/pg-faq/).
+For a new empty target, run `npm run db:migrate` to apply the MySQL baseline, then `npm run db:tidb:backup`, `npm run db:tidb:migrate`, and `npm run db:tidb:verify`. The transfer checks source/target columns, row counts, and key booking/payment/worker-zone relationships. The source remains available for rollback; this is a point-in-time copy, so pause writes or repeat a verified copy immediately before production cutover if the PostgreSQL app kept accepting changes.
 
-Install PostgreSQL client tools (`pg_dump` and `psql`) on the migration machine, then run `npm run db:tidb:backup`. It writes a SQL dump under the ignored `backups/` folder and prints its SHA-256 checksum. Review the backup. Only when the TiDB database is new and empty, run `npm run db:tidb:migrate`; it imports in one transaction and compares public table row counts. The tool never changes the app’s `DATABASE_URL`. Apply Prisma migrations and run application compatibility checks against the target before changing the deployment secret; keep the source database available for rollback.
-
-Do not cut over if the import or row-count verification fails. The TiDB PostgreSQL-compatible service is a preview without an SLA and may have transaction/feature differences; the target endpoint in the supplied connection details is in `us-east-1`, so verify app-to-database latency and confirm the hosting region before switching. Production payments should remain gated until those checks and the separate legal/Cashfree gates pass.
+The imported database has been verified locally. Production cutover still requires deploying this MySQL-compatible app build and changing Render's `DATABASE_URL` to the rotated TiDB URL. Do not delete the old Render database until the new deployment passes health, login, booking, payment-webhook, and rollback checks. Production payments remain gated by the separate legal/Cashfree requirements.
 
 ## Implemented workflows
 

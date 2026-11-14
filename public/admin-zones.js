@@ -6,6 +6,7 @@ let adminZoneMapPromise = null;
 
 const QWH_ODIA = {
   'ACCOUNT': 'ଖାତା', 'YOUR ACCOUNT': 'ଆପଣଙ୍କ ଖାତା', 'Install app': 'ଆପ୍ ଇନଷ୍ଟଲ୍ କରନ୍ତୁ', 'Sign out': 'ସାଇନ୍ ଆଉଟ୍',
+  'WORKER SPACE': 'କର୍ମୀ କାର୍ଯ୍ୟକ୍ଷେତ୍ର', 'Job requests': 'କାମ ଅନୁରୋଧ', 'My jobs': 'ମୋ କାମ', 'Earnings': 'ଆୟ', 'WORKER': 'କର୍ମୀ', 'Available jobs': 'ଉପଲବ୍ଧ କାମ', 'My assigned jobs': 'ମୋତେ ଦିଆଯାଇଥିବା କାମ', 'See work and update each wash from here.': 'ଏଠାରେ କାମ ଦେଖନ୍ତୁ ଏବଂ ପ୍ରତ୍ୟେକ ଧୋଇବାର ସ୍ଥିତି ବଦଳାନ୍ତୁ।', 'Wallet ledger balances after completed service.': 'ସେବା ସମ୍ପୂର୍ଣ୍ଣ ହେବା ପରେ ଆୟ ହିସାବ ଦେଖନ୍ତୁ।', 'Wallet': 'ୱାଲେଟ୍', 'Loading jobs…': 'କାମ ଲୋଡ୍ ହେଉଛି…', 'Loading your earnings…': 'ଆପଣଙ୍କ ଆୟ ଲୋଡ୍ ହେଉଛି…', 'You are online': 'ଆପଣ ଅନଲାଇନ୍ ଅଛନ୍ତି', 'You are offline': 'ଆପଣ ଅଫଲାଇନ୍ ଅଛନ୍ତି', 'No assigned jobs yet': 'ଏପର୍ଯ୍ୟନ୍ତ କାମ ଦିଆଯାଇନାହିଁ', 'No available jobs right now': 'ଏବେ କୌଣସି କାମ ଉପଲବ୍ଧ ନାହିଁ', 'When an admin assigns you a wash, it will appear here.': 'ପ୍ରଶାସକ ଆପଣଙ୍କୁ କାମ ଦେଲେ ଏଠାରେ ଦେଖାଯିବ।', 'Update my location': 'ମୋ ସ୍ଥାନ ଅପଡେଟ୍ କରନ୍ତୁ', 'Toggle online status': 'ଅନଲାଇନ୍ ସ୍ଥିତି ବଦଳାନ୍ତୁ',
   'Overview': 'ସାରାଂଶ', 'Bookings': 'ବୁକିଂଗୁଡ଼ିକ', 'Book a wash': 'ଧୋଇବା ବୁକ୍ କରନ୍ତୁ', 'Vehicles': 'ଯାନବାହନ', 'Addresses': 'ଠିକଣା', 'Offers & alerts': 'ଅଫର୍ ଓ ସୂଚନା', 'Support': 'ସହାୟତା', 'Support desk': 'ସହାୟତା କେନ୍ଦ୍ର',
   'Help and support': 'ସହାୟତା', 'Send a booking question and keep its reference number.': 'ବୁକିଂ ବିଷୟରେ ପ୍ରଶ୍ନ ପଠାନ୍ତୁ ଏବଂ ରେଫରେନ୍ସ ନମ୍ବର ସଂରକ୍ଷଣ କରନ୍ତୁ।', 'Contact QuickWashHub': 'QuickWashHub ସହିତ ଯୋଗାଯୋଗ କରନ୍ତୁ', 'Booking (optional)': 'ବୁକିଂ (ଇଚ୍ଛାଧୀନ)', 'General question': 'ସାଧାରଣ ପ୍ରଶ୍ନ', 'Subject': 'ବିଷୟ', 'How can we help?': 'ଆମେ କିପରି ସାହାଯ୍ୟ କରିପାରିବୁ?', 'Send support request': 'ସହାୟତା ଅନୁରୋଧ ପଠାନ୍ତୁ', 'Your support requests': 'ଆପଣଙ୍କ ସହାୟତା ଅନୁରୋଧ', 'Loading requests…': 'ଅନୁରୋଧ ଲୋଡ୍ ହେଉଛି…', 'Account data': 'ଖାତା ତଥ୍ୟ', 'You can request account deletion. We will review any records that must be kept for payment or legal obligations.': 'ଆପଣ ଖାତା ଡିଲିଟ୍ କରିବାକୁ ଅନୁରୋଧ କରିପାରିବେ। ଦେୟ କିମ୍ବା ଆଇନଗତ କାରଣରୁ ରଖିବାକୁ ପଡ଼ୁଥିବା ରେକର୍ଡ ଆମେ ଯାଞ୍ଚ କରିବୁ।', 'Request account deletion': 'ଖାତା ଡିଲିଟ୍ କରିବାକୁ ଅନୁରୋଧ କରନ୍ତୁ', 'No support requests yet.': 'ଏପର୍ଯ୍ୟନ୍ତ କୌଣସି ସହାୟତା ଅନୁରୋଧ ନାହିଁ।',
   'Hello, ': 'ନମସ୍କାର, ', 'Book a convenient car, bike, or solar-panel wash.': 'କାର୍, ବାଇକ୍ କିମ୍ବା ସୋଲାର୍ ପ୍ୟାନେଲ୍ ଧୋଇବା ସହଜରେ ବୁକ୍ କରନ୍ତୁ।', 'Your next booking': 'ଆପଣଙ୍କ ପରବର୍ତ୍ତୀ ବୁକିଂ', 'No booking yet': 'ଏପର୍ଯ୍ୟନ୍ତ ବୁକିଂ ନାହିଁ', 'Choose a service and book in a few steps.': 'ସେବା ବାଛନ୍ତୁ ଏବଂ କିଛି ପଦକ୍ଷେପରେ ବୁକ୍ କରନ୍ତୁ।', 'My vehicles': 'ମୋ ଯାନବାହନ', 'My addresses': 'ମୋ ଠିକଣା', 'Get help': 'ସହାୟତା ପାଆନ୍ତୁ', 'Recent bookings': 'ସାମ୍ପ୍ରତିକ ବୁକିଂ', 'Services in your area': 'ଆପଣଙ୍କ ଅଞ୍ଚଳର ସେବା', 'Services are being set up for your zone.': 'ଆପଣଙ୍କ ଜୋନ୍ ପାଇଁ ସେବା ପ୍ରସ୍ତୁତ ହେଉଛି।', 'Residential or commercial · quote after site inspection': 'ଘରୋଇ କିମ୍ବା ବାଣିଜ୍ୟିକ · ସ୍ଥାନ ଯାଞ୍ଚ ପରେ ମୂଲ୍ୟ ଜଣାଯିବ', 'Request quote': 'ମୂଲ୍ୟ ଅନୁରୋଧ କରନ୍ତୁ', 'Coming later': 'ପରେ ଆସିବ', 'Not available yet': 'ଏବେ ଉପଲବ୍ଧ ନାହିଁ',
@@ -84,7 +85,7 @@ customerView = function () {
   if (view === 'Support') return supportCustomerView();
   if (view !== 'Overview') return previousCustomerView();
   const next = bookings.find(b => !['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(b.status));
-  const active = catalog.services.filter(s => s.category !== 'HOME');
+  const active = visibleCustomerServices(catalog.services).filter(s => s.category !== 'HOME');
   const cards = active.map(s => '<article class="simple-service"><div><span class="service-symbol">' + (s.category === 'SOLAR' ? '☼' : s.vehicleType === 'BIKE' ? '◈' : '◇') + '</span><strong>' + esc(s.name) + '</strong></div><small>' + (s.category === 'SOLAR' ? 'Residential or commercial · quote after site inspection' : esc(s.vehicleType) + ' · ' + s.durationMin + ' min') + ' · ' + esc(s.zoneName) + '</small><b>' + (s.category === 'SOLAR' ? 'Request quote' : money(s.price)) + '</b></article>').join('');
   return heading('Hello, ' + (me.name || 'there'), 'Book a convenient car, bike, or solar-panel wash.', '<button class="primary" data-book>Book a wash →</button>') +
     '<section class="simple-dashboard"><div class="simple-main">' + panel('Your next booking', next ? bookingRows([next]) : '<div class="empty-state"><b>No booking yet</b>Choose a service and book in a few steps.</div>') +
@@ -171,6 +172,13 @@ function servicesPage() {
 
 async function loadServicesPage() {
   const [services, zones] = await Promise.all([api('/api/v1/admin/services'), api('/api/v1/admin/zones')]);
+  const serviceGroups = new Map();
+  for (const service of services) {
+    const key = service.category === 'SOLAR' ? 'SOLAR' : [service.category, service.vehicleType || '', service.name.trim().toLocaleLowerCase().replace(/\s+/g, ' ')].join('|');
+    serviceGroups.set(key, [...(serviceGroups.get(key) || []), service]);
+  }
+  const duplicateServices = [...serviceGroups.values()].filter(group => group.length > 1);
+  const duplicateNotice = duplicateServices.length ? '<div class="admin-warning"><strong>Possible duplicate services need review</strong><p>' + duplicateServices.map(group => group.map(s => esc(s.name) + ' (' + (s.isActive ? 'active' : 'inactive') + ')').join(' · ')).join('<br>') + '</p><small>Deactivate the extra entries after checking their zone prices and booking history. Existing records are kept intact.</small></div>' : '';
   const form = document.querySelector('#service-form'), category = form.elements.category;
   category.onchange = () => document.querySelector('#service-vehicle-wrap').classList.toggle('hidden', category.value !== 'VEHICLE');
   form.addEventListener('submit', async event => {
@@ -181,7 +189,7 @@ async function loadServicesPage() {
     try { await api('/api/v1/admin/services', { method: 'POST', body: JSON.stringify(payload) }); await render(); toast(kind === 'SOLAR' ? 'Solar quote service added' : kind === 'HOME' ? 'Home Wash saved as inactive' : 'Service added'); }
     catch (error) { toast(error.message); }
   }, true);
-  document.querySelector('#services-state').innerHTML = panel('Service catalogue', services.map(s =>
+  document.querySelector('#services-state').innerHTML = duplicateNotice + panel('Service catalogue', services.map(s =>
     '<div class="row"><div class="info"><strong>' + esc(s.name) + '</strong><small>' + esc(s.category) + (s.vehicleType ? ' · ' + esc(s.vehicleType) : '') + ' · ' + s.durationMin + ' min · ' + (s.isActive ? 'active' : 'inactive') +
     (s.category === 'SOLAR' ? ' · final quote after site inspection' : '') + '</small></div><button class="secondary" data-service-toggle="' + esc(s.id) + '" data-active="' + s.isActive + '">' + (s.isActive ? 'Deactivate' : 'Activate') + '</button></div>').join('')) +
     panel('Set immediate vehicle wash prices', '<form id="price-form" class="formrow"><label class="field"><span>Zone</span><select name="zoneId">' + zones.map(z => '<option value="' + esc(z.id) + '">' + esc(z.name) + '</option>').join('') + '</select></label><label class="field"><span>Vehicle wash service</span><select name="serviceId">' + services.filter(s => s.category === 'VEHICLE' && s.vehicleType).map(s => '<option value="' + esc(s.id) + '" data-type="' + esc(s.vehicleType) + '">' + esc(s.name) + ' · ' + esc(s.vehicleType) + '</option>').join('') + '</select></label><label class="field"><span>Price (₹)</span><input name="price" type="number" min="1" step="1" required></label><button class="primary">Save zone price</button></form>') +
@@ -254,7 +262,17 @@ async function loadZonesPage() {
   const [zones, workers, config] = await Promise.all([
     api('/api/v1/admin/zones'), api('/api/v1/admin/workers'), api('/api/v1/admin/zones/config')
   ]);
-  document.querySelector('#zones-state').innerHTML = panel('Configured service zones', zones.map(z =>
+  const mapZones = zones.filter(z => z.centerLat != null && z.centerLng != null && Number.isFinite(Number(z.centerLat)) && Number.isFinite(Number(z.centerLng)) && Number(z.radiusKm) > 0);
+  const overlaps = [];
+  for (let i = 0; i < mapZones.length; i++) for (let j = i + 1; j < mapZones.length; j++) {
+    const a = mapZones[i], b = mapZones[j], rad = value => value * Math.PI / 180;
+    const dLat = rad(Number(b.centerLat) - Number(a.centerLat)), dLng = rad(Number(b.centerLng) - Number(a.centerLng));
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(Number(a.centerLat))) * Math.cos(rad(Number(b.centerLat))) * Math.sin(dLng / 2) ** 2;
+    const distance = 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    if (distance < Number(a.radiusKm) + Number(b.radiusKm)) overlaps.push(a.name + ' ↔ ' + b.name + ' · ' + (a.isActive && b.isActive ? 'both active' : 'one inactive'));
+  }
+  const overlapNotice = overlaps.length ? '<div class="admin-warning"><strong>Zone coverage overlaps</strong><p>' + overlaps.map(esc).join('<br>') + '</p><small>Overlaps between active zones can affect booking pricing and worker eligibility. Review inactive overlaps before activating them.</small></div>' : '';
+  document.querySelector('#zones-state').innerHTML = overlapNotice + panel('Configured service zones', zones.map(z =>
     '<div class="row"><div class="info"><strong>' + esc(z.name) + '</strong><small>' +
     (z.radiusKm ? esc(z.radiusKm) + ' km radius' : 'Old polygon zone · choose a center and radius to edit') +
     ' · ' + esc(z.baseCommissionPct) + '% commission · ' + esc(z.couponMinimumContributionPct ?? 1) + '% minimum contribution · ' + (z.isActive ? 'active' : 'inactive') +

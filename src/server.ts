@@ -8,7 +8,7 @@ import { randomUUID, randomBytes, randomInt, createHash, scrypt as scryptCb, tim
 import { promisify } from 'node:util';
 import rateLimit from 'express-rate-limit';
 import { PrismaClient, BookingStatus, Role, VehicleType, WorkerType, KycStatus, PaymentStatus, LedgerType, PhotoType, PhotoStatus } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { z } from 'zod';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -20,7 +20,18 @@ import { calculateVehicleCouponDiscount } from './domain/coupon-pricing.js';
 const app = express();
 const connectionString = process.env.DATABASE_URL || '';
 if (!connectionString) throw new Error('DATABASE_URL is required.');
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString, max: Math.max(2, Number(process.env.DB_POOL_MAX) || 10), connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 }) });
+const databaseUrl = new URL(connectionString);
+if (databaseUrl.protocol !== 'mysql:') throw new Error('DATABASE_URL must use the mysql:// protocol.');
+const db = new PrismaClient({ adapter: new PrismaMariaDb({
+  host: databaseUrl.hostname,
+  port: Number(databaseUrl.port || 3306),
+  user: decodeURIComponent(databaseUrl.username),
+  password: decodeURIComponent(databaseUrl.password),
+  database: decodeURIComponent(databaseUrl.pathname.slice(1)),
+  ssl: { rejectUnauthorized: true },
+  connectionLimit: Math.max(2, Number(process.env.DB_POOL_MAX) || 10),
+  connectTimeout: 5000,
+}) });
 const port = Number(process.env.PORT || 4000);
 const production = process.env.NODE_ENV === 'production';
 const sessionCookie = 'quickwashhub_session';
@@ -406,10 +417,10 @@ app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_re
     db.service.findMany({ where: { category: { in: ['SOLAR', 'HOME'] } } }),
     db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true } })
   ]);
-  const solarServices = additionalServices.filter(function (service) { return service.category === 'SOLAR'; });
+  const solarServices = additionalServices.filter(function (service) { return service.category === 'SOLAR' && service.isActive; });
   const homeServices = additionalServices.filter(function (service) { return service.category === 'HOME'; });
   res.setHeader('Cache-Control', 'private, no-store');
-  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: true }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null });
+  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: s.isActive }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null });
 });
 app.get('/api/v1/marketing/preferences', customer, async function (_req, res) {
   const user = await db.user.findUniqueOrThrow({ where: { id: res.locals.user.id }, select: { marketingConsentAt: true, marketingConsentRevokedAt: true, pushSubscriptions: { select: { id: true } } } });
@@ -471,12 +482,19 @@ function zoneContainsPoint(zone: { centerLat: number | null; centerLng: number |
   return polygons.some(function (rings) { return !!rings[0] && contains(lng, lat, rings[0]) && !rings.slice(1).some(function (hole) { return contains(lng, lat, hole); }); });
 }
 async function zoneAt(lng: number, lat: number) {
-  const zones = await db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere } });
-  return zones.find(function (zone) {
+  const zones = await db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, orderBy: { name: 'asc' } });
+  const matches = zones.filter(function (zone) {
     if (zone.centerLat != null && zone.centerLng != null && zone.radiusKm != null) return distanceKm(lat, lng, zone.centerLat, zone.centerLng) <= zone.radiusKm;
     const g = zone.polygon as any; const polygons: number[][][][] = g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : [];
     return polygons.some(function (rings) { return !!rings[0] && contains(lng, lat, rings[0]) && !rings.slice(1).some(function (hole) { return contains(lng, lat, hole); }); });
   });
+  matches.sort(function (a, b) {
+    const radiusA = a.radiusKm ?? Number.POSITIVE_INFINITY, radiusB = b.radiusKm ?? Number.POSITIVE_INFINITY;
+    if (radiusA !== radiusB) return radiusA - radiusB;
+    if (a.centerLat != null && a.centerLng != null && b.centerLat != null && b.centerLng != null) return distanceKm(lat, lng, a.centerLat, a.centerLng) - distanceKm(lat, lng, b.centerLat, b.centerLng);
+    return a.name.localeCompare(b.name);
+  });
+  return matches[0] || null;
 }
 const addressInput = z.object({ label: z.string().trim().min(1).max(50), lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), fullAddress: z.string().trim().min(5).max(300) });
 app.get('/api/v1/addresses', customer, async function (_req, res) { res.json(await db.address.findMany({ where: { customerId: res.locals.user.id }, include: { zone: true } })); });
@@ -882,7 +900,7 @@ app.patch('/api/v1/admin/photos/:id', admin, async function (req, res) {
       await db.$transaction(async function (tx) {
         const payment = await tx.payment.findUnique({ where: { bookingId: photo.bookingId }, select: { method: true } });
         const usesCashfreeVendorSettlement = payment?.method === 'cashfree';
-        if (!usesCashfreeVendorSettlement) await tx.$queryRaw`SELECT "id" FROM "Worker" WHERE "id" = ${workerId} FOR UPDATE`;
+        if (!usesCashfreeVendorSettlement) await tx.$queryRaw`SELECT \`id\` FROM \`Worker\` WHERE \`id\` = ${workerId} FOR UPDATE`;
         const exists = usesCashfreeVendorSettlement ? null : await tx.walletLedger.findFirst({ where: { workerId, bookingId: photo.bookingId, type: LedgerType.CREDIT } });
         if (!exists && !usesCashfreeVendorSettlement) {
           const ledger = await tx.walletLedger.findMany({ where: { workerId } });
@@ -1014,7 +1032,7 @@ app.patch('/api/v1/admin/zones/:id', admin, async function (req, res) {
 app.get('/api/v1/admin/services', admin, async function (_req, res) { res.json(await db.service.findMany({ include: { prices: { include: { zone: true } } }, orderBy: { name: 'asc' } })); });
 app.patch('/api/v1/admin/services/:id', admin, async function (req, res) { const p = z.object({ isActive: z.boolean() }).strict().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Provide a service activation setting.' }); const before = await db.service.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Service not found.' }); const active = before.category === 'HOME' && process.env.HOME_WASH_ENABLED !== 'true' ? false : p.data.isActive; const service = await db.service.update({ where: { id: before.id }, data: { isActive: active } }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'SET_SERVICE_ACTIVE', entity: 'Service', entityId: before.id, before: { isActive: before.isActive }, after: { isActive: active } } }); res.json(service); });
 const serviceInput = z.object({ name: z.string().trim().min(2).max(100), category: z.enum(['VEHICLE', 'SOLAR', 'HOME']).default('VEHICLE'), vehicleType: z.nativeEnum(VehicleType).optional(), durationMin: z.number().int().min(5).max(600), isActive: z.boolean().optional() }).strict().refine(function (x) { return x.category !== 'VEHICLE' || !!x.vehicleType; }, { message: 'Vehicle type required for vehicle services.' });
-app.post('/api/v1/admin/services', admin, async function (req, res) { const p = serviceInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a category and the matching details for this service.' }); const data = { ...p.data, isActive: p.data.category === 'HOME' ? p.data.isActive === true && process.env.HOME_WASH_ENABLED === 'true' : p.data.isActive ?? true }; res.status(201).json(await db.service.create({ data })); });
+app.post('/api/v1/admin/services', admin, async function (req, res) { const p = serviceInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a category and the matching details for this service.' }); const sameType = await db.service.findMany({ where: { category: p.data.category, vehicleType: p.data.vehicleType ?? null }, select: { name: true } }); const duplicate = sameType.some(function (service) { return service.name.trim().toLocaleLowerCase().replace(/\s+/g, ' ') === p.data.name.trim().toLocaleLowerCase().replace(/\s+/g, ' '); }); if (duplicate) return res.status(409).json({ error: 'A service with this name, category, and vehicle type already exists. Review the existing service in the catalogue.' }); const data = { ...p.data, isActive: p.data.category === 'HOME' ? p.data.isActive === true && process.env.HOME_WASH_ENABLED === 'true' : p.data.isActive ?? true }; res.status(201).json(await db.service.create({ data })); });
 app.put('/api/v1/admin/zones/:zoneId/prices/:serviceId', admin, async function (req, res) {
   const p = z.object({ price: z.number().int().positive().max(100000000), vehicleType: z.nativeEnum(VehicleType), festivalMultiplier: z.number().min(0.1).max(10).default(1) }).strict().safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'Price must be a positive amount in paise.' });
@@ -1036,7 +1054,7 @@ app.post('/api/v1/admin/payouts', admin, async function (req, res) {
   if (!p.success) return res.status(400).json({ error: 'Specify worker and amount in paise.' });
   try {
     const payout = await db.$transaction(async function (tx) {
-      await tx.$queryRaw`SELECT "id" FROM "Worker" WHERE "id" = ${p.data.workerId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT \`id\` FROM \`Worker\` WHERE \`id\` = ${p.data.workerId} FOR UPDATE`;
       const profile = await tx.worker.findUnique({ where: { id: p.data.workerId } }); if (!profile) throw new Error('worker_not_found');
       const [entries, pending] = await Promise.all([tx.walletLedger.findMany({ where: { workerId: profile.id } }), tx.payout.findMany({ where: { workerId: profile.id, status: 'PENDING' } })]);
       const balance = entries.reduce(function (n, x) { return n + (x.type === LedgerType.CREDIT ? x.amount : -x.amount); }, 0) - pending.reduce(function (n, x) { return n + x.amount; }, 0);
@@ -1051,7 +1069,7 @@ app.post('/api/v1/admin/payouts/:id/mark-paid', admin, async function (req, res)
   try {
     const updated = await db.$transaction(async function (tx) {
       const payout = await tx.payout.findUnique({ where: { id: String(req.params.id) } }); if (!payout || payout.status !== 'PENDING') throw new Error('payout_not_pending');
-      await tx.$queryRaw`SELECT "id" FROM "Worker" WHERE "id" = ${payout.workerId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT \`id\` FROM \`Worker\` WHERE \`id\` = ${payout.workerId} FOR UPDATE`;
       const entries = await tx.walletLedger.findMany({ where: { workerId: payout.workerId } });
       const available = entries.reduce(function (n, x) { return n + (x.type === LedgerType.CREDIT ? x.amount : -x.amount); }, 0);
       if (payout.amount > available) throw new Error('balance_changed');

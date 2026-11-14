@@ -1,0 +1,470 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  CUSTOMER
+  WORKER
+  ADMIN
+}
+
+enum VehicleType {
+  CAR
+  BIKE
+}
+
+enum ServiceCategory {
+  VEHICLE
+  SOLAR
+  HOME
+}
+
+enum WorkerType {
+  PERMANENT
+  TEMP
+}
+
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  CREATED
+  QUOTE_REQUESTED
+  QUOTE_PROVIDED
+  PAYMENT_PENDING
+  PAID
+  ASSIGNING
+  ASSIGNED
+  WORKER_ON_THE_WAY
+  IN_PROGRESS
+  PHOTOS_UPLOADED
+  APPROVED
+  COMPLETED
+  CANCELLED
+  REJECTED_PHOTOS
+  REFUNDED
+  NO_WORKER_FOUND
+}
+
+enum PhotoType {
+  BEFORE
+  AFTER
+}
+
+enum PhotoStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AuthChallengeType {
+  VERIFY_EMAIL
+  PASSWORD_RESET
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  REFUNDED
+}
+
+enum LedgerType {
+  CREDIT
+  DEBIT
+  PAYOUT
+}
+
+model User {
+  id              String          @id @default(cuid())
+  email           String?         @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String?
+  phone           String?         @unique
+  name            String?
+  role            Role            @default(CUSTOMER)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  marketingConsentAt DateTime?
+  marketingConsentRevokedAt DateTime?
+  adminMfaSecretEnc String?
+  adminMfaPendingSecretEnc String?
+  adminMfaPendingExpiresAt DateTime?
+  vehicles        Vehicle[]
+  addresses       Address[]
+  bookings        Booking[]
+  worker          Worker?
+  authSessions    AuthSession[]
+  auditLogs       AuditLog[]
+  authChallenges  AuthChallenge[]
+  supportTickets  SupportTicket[]
+  deletionRequests AccountDeletionRequest[]
+  coupons         Coupon[]
+  pushSubscriptions PushSubscription[]
+}
+
+model AuthChallenge {
+  id         String            @id @default(cuid())
+  email      String
+  type       AuthChallengeType
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int               @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime          @default(now())
+  userId     String?
+  user       User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, type, createdAt])
+}
+
+model Worker {
+  id         String         @id @default(cuid())
+  userId     String         @unique
+  user       User           @relation(fields: [userId], references: [id])
+  type       WorkerType     @default(PERMANENT)
+  kycStatus  KycStatus      @default(PENDING)
+  isOnline   Boolean        @default(false)
+  currentLat Float?
+  currentLng Float?
+  rating     Float          @default(5)
+  upiId      String?
+  cashfreeVendorId String?
+  solarQualified Boolean @default(false)
+  bookings   Booking[]
+  zones      WorkerZone[]
+  ledger     WalletLedger[]
+  payouts    Payout[]
+}
+
+model Vehicle {
+  id         String      @id @default(cuid())
+  customerId String
+  customer   User        @relation(fields: [customerId], references: [id])
+  type       VehicleType
+  model      String
+  number     String
+  bookings   Booking[]
+  bookingItems BookingVehicle[]
+}
+
+model Address {
+  id          String    @id @default(cuid())
+  customerId  String
+  customer    User      @relation(fields: [customerId], references: [id])
+  label       String
+  lat         Float
+  lng         Float
+  fullAddress String
+  zoneId      String?
+  zone        Zone?     @relation(fields: [zoneId], references: [id])
+  bookings    Booking[]
+}
+
+model Zone {
+  id                String       @id @default(cuid())
+  name              String
+  isActive          Boolean      @default(true)
+  baseCommissionPct Float        @default(20)
+  couponMinimumContributionPct Float @default(1)
+  polygon           Json?
+  centerLat         Float?
+  centerLng         Float?
+  radiusKm          Float?
+  prices            ZonePrice[]
+  addresses         Address[]
+  workers           WorkerZone[]
+  bookings          Booking[]
+  campaigns         Campaign[]
+  coupons           Coupon[]
+}
+
+model Service {
+  id          String      @id @default(cuid())
+  name        String
+  category    ServiceCategory @default(VEHICLE)
+  vehicleType VehicleType?
+  durationMin Int
+  isActive    Boolean     @default(true)
+  prices      ZonePrice[]
+  bookings    Booking[]
+  bookingItems BookingVehicle[]
+}
+
+model ZonePrice {
+  id                 String      @id @default(cuid())
+  zoneId             String
+  serviceId          String
+  vehicleType        VehicleType?
+  solarPanelTier     String?
+  price              Int
+  festivalMultiplier Float       @default(1)
+  zone               Zone        @relation(fields: [zoneId], references: [id])
+  service            Service     @relation(fields: [serviceId], references: [id])
+
+  @@unique([zoneId, serviceId, vehicleType, solarPanelTier])
+}
+
+model WorkerZone {
+  workerId String
+  zoneId   String
+  worker   Worker @relation(fields: [workerId], references: [id])
+  zone     Zone   @relation(fields: [zoneId], references: [id])
+
+  @@id([workerId, zoneId])
+}
+
+model Booking {
+  id            String         @id @default(cuid())
+  customerId    String
+  workerId      String?
+  zoneId        String
+  vehicleId     String?
+  solarPanelCount Int?
+  solarRoofType String?
+  solarAccessNotes String?
+  solarPropertyType String?
+  quoteNote String?
+  addressId     String
+  serviceId     String
+  scheduledAt   DateTime
+  status        BookingStatus  @default(CREATED)
+  price         Int
+  commissionAmt Int
+  workerEarning Int
+  startOtpHash  String?
+  couponCode    String?
+  couponDiscount Int @default(0)
+  createdAt     DateTime       @default(now())
+  completedAt   DateTime?
+  customer      User           @relation(fields: [customerId], references: [id])
+  worker        Worker?        @relation(fields: [workerId], references: [id])
+  zone          Zone           @relation(fields: [zoneId], references: [id])
+  vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id])
+  address       Address        @relation(fields: [addressId], references: [id])
+  service       Service        @relation(fields: [serviceId], references: [id])
+  photos        BookingPhoto[]
+  payment       Payment?
+  rating        Rating?
+  walletEntries WalletLedger[]
+  supportTickets SupportTicket[]
+  vehicleItems   BookingVehicle[]
+}
+
+model BookingVehicle {
+  id        String @id @default(cuid())
+  bookingId String
+  vehicleId String
+  serviceId String
+  price     Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([bookingId, vehicleId])
+  @@index([vehicleId])
+}
+
+model BookingPhoto {
+  id         String      @id @default(cuid())
+  bookingId  String
+  type       PhotoType
+  url        String
+  status     PhotoStatus @default(PENDING)
+  capturedAt DateTime?
+  lat        Float?
+  lng        Float?
+  booking    Booking     @relation(fields: [bookingId], references: [id])
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  bookingId  String        @unique
+  amount     Int
+  method     String
+  gatewayRef String?       @unique
+  status     PaymentStatus @default(PENDING)
+  paymentSessionId String?
+  splitStatus String @default("NOT_READY")
+  splitUpdatedAt DateTime?
+  refundedAmount Int @default(0)
+  reconciliationSnapshot Json?
+  reconciledAt DateTime?
+  paidAt DateTime?
+  booking    Booking       @relation(fields: [bookingId], references: [id])
+  refunds    CashfreeRefund[]
+}
+
+model CashfreeRefund {
+  id             String   @id @default(cuid())
+  paymentId      String
+  idempotencyKey String   @unique
+  refundId       String   @unique
+  amount         Int
+  reason         String
+  workerAdjustment Int @default(0)
+  status         String   @default("INITIATING")
+  cashfreeRefundId String?
+  statusDescription String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  payment        Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model WalletLedger {
+  id           String     @id @default(cuid())
+  workerId     String
+  bookingId    String?
+  type         LedgerType
+  amount       Int
+  balanceAfter Int
+  createdAt    DateTime   @default(now())
+  worker       Worker     @relation(fields: [workerId], references: [id])
+  booking      Booking?   @relation(fields: [bookingId], references: [id])
+
+  @@unique([workerId, bookingId, type])
+}
+
+model Payout {
+  id       String    @id @default(cuid())
+  workerId String
+  amount   Int
+  utr      String?
+  status   String    @default("PENDING")
+  paidAt   DateTime?
+  worker   Worker    @relation(fields: [workerId], references: [id])
+}
+
+model Campaign {
+  id                String   @id @default(cuid())
+  name              String
+  zoneId            String
+  startDate         DateTime
+  endDate           DateTime
+  surgePct          Float    @default(0)
+  tempWorkersNeeded Int      @default(0)
+  zone              Zone     @relation(fields: [zoneId], references: [id])
+}
+
+model Coupon {
+  id          String   @id @default(cuid())
+  userId      String
+  zoneId      String?
+  code        String   @unique
+  trigger     String
+  discountPct Float
+  expiresAt   DateTime
+  redeemedAt  DateTime?
+  bookingId   String?  @unique
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone        Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@index([userId, expiresAt, redeemedAt])
+  @@index([trigger, createdAt])
+  @@unique([userId, trigger])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  keys      Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model NotificationDelivery {
+  id            String   @id @default(cuid())
+  userId        String?
+  bookingId     String?
+  channel       String
+  recipient     String
+  template      String
+  payload       Json
+  dedupeKey     String   @unique
+  status        String   @default("PENDING")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  sentAt        DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([bookingId, channel])
+}
+
+model Rating {
+  id        String  @id @default(cuid())
+  bookingId String  @unique
+  stars     Int
+  comment   String?
+  booking   Booking @relation(fields: [bookingId], references: [id])
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  admin     User     @relation(fields: [adminId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+model SupportTicket {
+  id         String   @id @default(cuid())
+  reference  String   @unique
+  customerId String
+  bookingId  String?
+  subject    String
+  message    String
+  status     String   @default("OPEN")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   User     @relation(fields: [customerId], references: [id])
+  booking    Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AccountDeletionRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  reason    String?
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}

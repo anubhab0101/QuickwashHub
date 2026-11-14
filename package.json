@@ -14,13 +14,14 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:tidb:backup": "node scripts/migrate-postgres-to-tidb.mjs",
-    "db:tidb:migrate": "node scripts/migrate-postgres-to-tidb.mjs --migrate",
+    "db:tidb:migrate": "node scripts/migrate-postgres-to-tidb-mysql.mjs",
+    "db:tidb:verify": "node scripts/migrate-postgres-to-tidb-mysql.mjs --verify",
     "db:bootstrap-admin": "tsx prisma/bootstrap-admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1164.0",
     "@aws-sdk/s3-request-presigner": "^3.1164.0",
-    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/adapter-mariadb": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
@@ -28,6 +29,7 @@
     "express-rate-limit": "^8.7.3",
     "google-auth-library": "^11.3.3",
     "helmet": "^8.1.0",
+    "mariadb": "^3.5.5",
     "pg": "^8.23.1",
     "web-push": "^4.0.0",
     "zod": "^4.6.7"
