@@ -125,7 +125,7 @@ app.get('/health', async function (_req, res) {
 });
 app.get('/api/v1', function (_req, res) { res.json({ name: 'QuickWashHub Car & Bike Wash API', version: 'v1' }); });
 app.get('/api/v1/auth/config', function (_req, res) { res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null }); });
-app.get('/api/v1/public/business-info', function (_req, res) { res.setHeader('Cache-Control', 'public, max-age=300'); res.json({ legalName: process.env.BUSINESS_LEGAL_NAME || 'QuickWashHub', address: process.env.BUSINESS_ADDRESS || 'To be provided before launch', grievanceOfficer: process.env.GRIEVANCE_OFFICER || 'Grievance Officer', grievanceEmail: process.env.GRIEVANCE_EMAIL || '', grievancePhone: process.env.GRIEVANCE_PHONE || '', legalReviewApproved: process.env.LEGAL_REVIEW_APPROVED === 'true', betaArea: '42 Mouza, Cuttack, Odisha' }); });
+app.get('/api/v1/public/business-info', function (_req, res) { res.setHeader('Cache-Control', 'public, max-age=300'); res.json({ legalName: process.env.BUSINESS_LEGAL_NAME || 'Anubhab Mohapatra', address: process.env.BUSINESS_ADDRESS || '', grievanceOfficer: process.env.GRIEVANCE_OFFICER || 'Anubhab Mohapatra', grievanceEmail: process.env.GRIEVANCE_EMAIL || 'asaylestech.ctc@gmail.com', grievancePhone: process.env.GRIEVANCE_PHONE || '+91 6372009049', legalReviewApproved: process.env.LEGAL_REVIEW_APPROVED === 'true', betaArea: '42 Mouza, Cuttack, Odisha' }); });
 
 const emailBody = z.string().trim().email().max(254).transform(function (x) { return x.toLowerCase(); });
 const passwordBody = z.string().min(10).max(128);

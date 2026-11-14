@@ -12,4 +12,4 @@ fetch('/api/v1/public/business-info').then(response => response.json()).then(inf
   const email = document.querySelector('#grievance-email'); email.textContent = info.grievanceEmail; if (info.grievanceEmail) email.href = 'mailto:' + info.grievanceEmail; else email.hidden = true;
   const phone = document.querySelector('#grievance-phone'); phone.textContent = info.grievancePhone; if (info.grievancePhone) phone.href = 'tel:' + info.grievancePhone; else phone.hidden = true;
   if (!info.legalReviewApproved) { const notice = document.querySelector('#policy-review-status'); notice.textContent = 'This policy set must be reviewed by the business and its legal/tax advisers before public paid bookings are enabled.'; notice.classList.remove('hidden'); }
-}).catch(() => { document.querySelector('#business-name').textContent = 'Business details are temporarily unavailable.'; });
+}).catch(() => {});
