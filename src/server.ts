@@ -529,7 +529,16 @@ app.get('/api/v1/services', authenticated(), async function (req, res) {
 app.get('/api/v1/vehicles', customer, async function (_req, res) { res.json(await db.vehicle.findMany({ where: { customerId: res.locals.user.id } })); });
 const vehicleInput = z.object({ type: z.nativeEnum(VehicleType), model: z.string().trim().min(1).max(80), number: z.string().trim().min(2).max(20).transform(function (x) { return x.toUpperCase(); }) });
 app.post('/api/v1/vehicles', customer, async function (req, res) { const p = vehicleInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Enter valid vehicle details.' }); res.status(201).json(await db.vehicle.create({ data: { ...p.data, customerId: res.locals.user.id } })); });
-app.delete('/api/v1/vehicles/:id', customer, async function (req, res) { const result = await db.vehicle.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: { status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.REFUNDED] } } } } }); if (!result.count) return res.status(409).json({ error: 'Vehicle not found or linked to an active booking.' }); res.status(204).end(); });
+app.delete('/api/v1/vehicles/:id', customer, async function (req, res) {
+  try {
+    const result = await db.vehicle.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: {} }, bookingItems: { none: {} } } });
+    if (!result.count) return res.status(409).json({ error: 'This vehicle is linked to booking history and cannot be removed.' });
+    res.status(204).end();
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003') return res.status(409).json({ error: 'This vehicle is linked to booking history and cannot be removed.' });
+    throw error;
+  }
+});
 
 function contains(lng: number, lat: number, ring: number[][]) { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[1] > lat) !== (b[1] > lat) && lng < (b[0] - a[0]) * (lat - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside; } return inside; }
 function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) { const toRad = function (d: number) { return d * Math.PI / 180; }; const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1); const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2; return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
@@ -556,7 +565,16 @@ async function zoneAt(lng: number, lat: number) {
 const addressInput = z.object({ label: z.string().trim().min(1).max(50), lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), fullAddress: z.string().trim().min(5).max(300) });
 app.get('/api/v1/addresses', customer, async function (_req, res) { res.json(await db.address.findMany({ where: { customerId: res.locals.user.id }, include: { zone: true } })); });
 app.post('/api/v1/addresses', customer, async function (req, res) { const p = addressInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Enter a valid address and map location.' }); const zone = await zoneAt(p.data.lng, p.data.lat); if (!zone) return res.status(422).json({ error: 'Service is unavailable at this location.' }); res.status(201).json(await db.address.create({ data: { ...p.data, customerId: res.locals.user.id, zoneId: zone.id }, include: { zone: true } })); });
-app.delete('/api/v1/addresses/:id', customer, async function (req, res) { const result = await db.address.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: { status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.REFUNDED] } } } } }); if (!result.count) return res.status(409).json({ error: 'Address not found or linked to an active booking.' }); res.status(204).end(); });
+app.delete('/api/v1/addresses/:id', customer, async function (req, res) {
+  try {
+    const result = await db.address.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: {} } } });
+    if (!result.count) return res.status(409).json({ error: 'This address is linked to booking history and cannot be removed.' });
+    res.status(204).end();
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003') return res.status(409).json({ error: 'This address is linked to booking history and cannot be removed.' });
+    throw error;
+  }
+});
 app.post('/api/v1/support/tickets', customer, async function (req, res) {
   const p = z.object({ bookingId: z.string().optional(), subject: z.string().trim().min(4).max(120), message: z.string().trim().min(10).max(4000) }).strict().safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'Enter a subject and a message of at least 10 characters.' });
