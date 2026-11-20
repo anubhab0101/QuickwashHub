@@ -6,6 +6,7 @@ document.querySelectorAll('[data-language]').forEach(button => button.addEventLi
 }));
 
 fetch('/api/v1/public/business-info').then(response => response.json()).then(info => {
+  if (info.serviceArea) document.querySelector('#service-area-label').textContent = info.serviceArea;
   document.querySelector('#business-name').textContent = info.legalName;
   document.querySelector('#business-address').textContent = info.address;
   document.querySelector('#grievance-officer').textContent = info.grievanceOfficer;

@@ -1,13 +1,13 @@
-const CACHE_NAME = 'quickwashhub-shell-v23';
+const CACHE_NAME = 'quickwashhub-shell-v24';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/styles.css?v=18',
-  '/app.js?v=17',
-  '/admin-zones.js?v=6',
+  '/app.js?v=18',
+  '/admin-zones.js?v=7',
   '/policies.html',
   '/policies.css?v=1',
-  '/policies.js?v=2',
+  '/policies.js?v=3',
   '/manifest.webmanifest?v=4',
   '/icons/icon-192.png?v=4',
   '/icons/icon-512.png?v=4',

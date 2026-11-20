@@ -47,9 +47,16 @@ const cashfreeSecret = process.env.CASHFREE_CLIENT_SECRET || '';
 const cashfreeEnv = process.env.CASHFREE_ENV === 'production' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
 const cashfreeVersion = process.env.CASHFREE_API_VERSION || '2026-01-01';
 const easySplitEnabled = process.env.CASHFREE_EASY_SPLIT_ENABLED === 'true';
-const pilotZoneIds = (process.env.PILOT_ZONE_IDS || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-const pilotZoneWhere = production || pilotZoneIds.length ? { id: { in: pilotZoneIds } } : {};
-const publicPaymentsReady = production && process.env.PUBLIC_BOOKINGS_ENABLED === 'true' && process.env.CASHFREE_ENV === 'production' && !!cashfreeId && !!cashfreeSecret && easySplitEnabled && !!s3 && !!bucket && !!process.env.GOOGLE_MAPS_API_KEY && pilotZoneIds.length > 0 && process.env.LEGAL_REVIEW_APPROVED === 'true' && !!process.env.BUSINESS_LEGAL_NAME && !!process.env.BUSINESS_ADDRESS && !!process.env.GRIEVANCE_OFFICER && !!process.env.GRIEVANCE_EMAIL && !!process.env.GRIEVANCE_PHONE;
+const activeZoneSetting = process.env.ACTIVE_ZONE_IDS !== undefined ? process.env.ACTIVE_ZONE_IDS : process.env.PILOT_ZONE_IDS || '';
+const activeZoneIds = activeZoneSetting.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+const activeZoneWhere = production || activeZoneIds.length ? { id: { in: activeZoneIds } } : {};
+function envCoordinate(name: string, fallback: number, min: number, max: number) { const raw = process.env[name]; if (!raw?.trim()) return fallback; const value = Number(raw); return Number.isFinite(value) && value >= min && value <= max ? value : fallback; }
+const mapDefaultCenter = { lat: envCoordinate('MAP_DEFAULT_CENTER_LAT', 20.4625, -90, 90), lng: envCoordinate('MAP_DEFAULT_CENTER_LNG', 85.883, -180, 180) };
+const mapDefaultZoom = Math.round(envCoordinate('MAP_DEFAULT_ZOOM', 12, 3, 20));
+const mapAutocompleteRadiusKm = envCoordinate('MAP_AUTOCOMPLETE_RADIUS_KM', 35, 0.5, 50);
+const mapCountryCode = (process.env.MAP_COUNTRY_CODE || 'IN').trim().toLowerCase() || 'in';
+const serviceAreaLabel = (process.env.SERVICE_AREA_LABEL || 'Cuttack · 42 Mouza').trim().slice(0, 120) || 'Cuttack · 42 Mouza';
+const publicPaymentsReady = production && process.env.PUBLIC_BOOKINGS_ENABLED === 'true' && process.env.CASHFREE_ENV === 'production' && !!cashfreeId && !!cashfreeSecret && easySplitEnabled && !!s3 && !!bucket && !!process.env.GOOGLE_MAPS_API_KEY && activeZoneIds.length > 0 && process.env.LEGAL_REVIEW_APPROVED === 'true' && !!process.env.BUSINESS_LEGAL_NAME && !!process.env.BUSINESS_ADDRESS && !!process.env.GRIEVANCE_OFFICER && !!process.env.GRIEVANCE_EMAIL && !!process.env.GRIEVANCE_PHONE;
 if (production && (!process.env.CORS_ORIGIN || !process.env.RESEND_API_KEY || !process.env.EMAIL_FROM || !process.env.GOOGLE_CLIENT_ID || !s3 || !bucket)) throw new Error('Production requires exact CORS origin, email delivery, Google OAuth and private object storage credentials. Payments remain disabled until all beta launch gates are completed.');
 if (production && allowedOrigins.some(function (origin) { return origin === '*' || new URL(origin).protocol !== 'https:'; })) throw new Error('Production CORS origins must be exact HTTPS origins.');
 const storageOrigin = process.env.S3_ENDPOINT ? new URL(process.env.S3_ENDPOINT).origin : '';
@@ -125,7 +132,7 @@ app.get('/health', async function (_req, res) {
 });
 app.get('/api/v1', function (_req, res) { res.json({ name: 'QuickWashHub Car & Bike Wash API', version: 'v1' }); });
 app.get('/api/v1/auth/config', function (_req, res) { res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null }); });
-app.get('/api/v1/public/business-info', function (_req, res) { res.setHeader('Cache-Control', 'public, max-age=300'); res.json({ legalName: process.env.BUSINESS_LEGAL_NAME || 'Anubhab Mohapatra', address: process.env.BUSINESS_ADDRESS || '', grievanceOfficer: process.env.GRIEVANCE_OFFICER || 'Anubhab Mohapatra', grievanceEmail: process.env.GRIEVANCE_EMAIL || 'asaylestech.ctc@gmail.com', grievancePhone: process.env.GRIEVANCE_PHONE || '+91 6372009049', legalReviewApproved: process.env.LEGAL_REVIEW_APPROVED === 'true', betaArea: '42 Mouza, Cuttack, Odisha' }); });
+app.get('/api/v1/public/business-info', function (_req, res) { res.setHeader('Cache-Control', 'public, max-age=300'); res.json({ legalName: process.env.BUSINESS_LEGAL_NAME || 'Anubhab Mohapatra', address: process.env.BUSINESS_ADDRESS || '', grievanceOfficer: process.env.GRIEVANCE_OFFICER || 'Anubhab Mohapatra', grievanceEmail: process.env.GRIEVANCE_EMAIL || 'asaylestech.ctc@gmail.com', grievancePhone: process.env.GRIEVANCE_PHONE || '+91 6372009049', legalReviewApproved: process.env.LEGAL_REVIEW_APPROVED === 'true', serviceArea: serviceAreaLabel }); });
 
 const emailBody = z.string().trim().email().max(254).transform(function (x) { return x.toLowerCase(); });
 const passwordBody = z.string().min(10).max(128);
@@ -147,7 +154,7 @@ function challengeHash(email: string, type: string, code: string): string {
 function htmlEscape(input: string): string { return input.replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!; }); }
 function brandedEmail(title: string, intro: string, content: string, ctaUrl?: string, unsubscribeUrl?: string, marketing = false) {
   const button = ctaUrl ? '<p style="margin:28px 0 8px"><a href="' + htmlEscape(ctaUrl) + '" style="display:inline-block;background:#173d2c;color:#fff;text-decoration:none;padding:14px 22px;border-radius:8px;font-weight:700">Open QuickWashHub</a></p>' : '';
-  const footer = marketing ? 'You’re receiving this marketing email because you opted in to QuickWashHub offers.' + (unsubscribeUrl ? ' <a href="' + htmlEscape(unsubscribeUrl) + '" style="color:#26714d">Unsubscribe</a>.' : '') : 'QuickWashHub customer support · Cuttack, Odisha';
+  const footer = marketing ? 'You’re receiving this marketing email because you opted in to QuickWashHub offers.' + (unsubscribeUrl ? ' <a href="' + htmlEscape(unsubscribeUrl) + '" style="color:#26714d">Unsubscribe</a>.' : '') : 'QuickWashHub customer support';
   return '<div style="margin:0;background:#f3f5f1;padding:32px 12px;font-family:Arial,Helvetica,sans-serif;color:#17241b"><div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e3e8e1;border-radius:16px;overflow:hidden"><div style="padding:22px 28px;background:#173d2c;color:#fff;font-size:18px;font-weight:700">QuickWashHub <span style="color:#d9f08a">·</span></div><div style="padding:30px 28px"><div style="font-size:11px;letter-spacing:1.5px;color:#26714d;font-weight:700;text-transform:uppercase">CAR &amp; BIKE CARE, AT YOUR DOOR</div><h1 style="margin:10px 0 12px;font-size:26px;line-height:1.2;color:#17241b">' + htmlEscape(title) + '</h1><p style="margin:0;color:#5d6b61;font-size:15px;line-height:1.65">' + htmlEscape(intro) + '</p><div style="margin-top:20px;padding:18px;background:#f5f7f2;border-radius:10px;color:#26362b;font-size:14px;line-height:1.65">' + content + '</div>' + button + '<p style="margin:26px 0 0;color:#879189;font-size:11px;line-height:1.6">' + footer + '</p></div></div></div>';
 }
 async function sendEmail(to: string, subject: string, text: string, html?: string) {
@@ -426,14 +433,14 @@ app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_re
   const [vehicles, addresses, prices, additionalServices, zones] = await Promise.all([
     db.vehicle.findMany({ where: { customerId: userId }, orderBy: { model: 'asc' } }),
     db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
-    db.zonePrice.findMany({ where: { zone: { isActive: true, ...pilotZoneWhere }, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
+    db.zonePrice.findMany({ where: { zone: { isActive: true, ...activeZoneWhere }, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
     db.service.findMany({ where: { category: { in: ['SOLAR', 'HOME'] } } }),
-    db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true, polygon: true } })
+    db.zone.findMany({ where: { isActive: true, ...activeZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true, polygon: true } })
   ]);
   const solarServices = additionalServices.filter(function (service) { return service.category === 'SOLAR' && service.isActive; });
   const homeServices = additionalServices.filter(function (service) { return service.category === 'HOME'; });
   res.setHeader('Cache-Control', 'private, no-store');
-  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: s.isActive }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null });
+  res.json({ user: { id: userId, name: res.locals.user.name, role: res.locals.user.role }, vehicles, addresses, zones, services: [...prices.map(function (p) { return { id: p.serviceId, name: p.service.name, category: p.service.category, vehicleType: p.vehicleType, solarPanelTier: p.solarPanelTier, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name, isActive: p.service.isActive }; }), ...solarServices.flatMap(function (s) { return zones.map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: s.isActive }; }); }), ...homeServices.flatMap(function (s) { return zones.slice(0, 1).map(function (z) { return { id: s.id, name: s.name, category: s.category, vehicleType: null, solarPanelTier: null, durationMin: s.durationMin, price: null, zoneId: z.id, zoneName: z.name, isActive: false }; }); })], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null, mapDefaultCenter, mapDefaultZoom, mapAutocompleteRadiusKm, mapCountryCode, serviceAreaLabel });
 });
 app.get('/api/v1/marketing/preferences', customer, async function (_req, res) {
   const user = await db.user.findUniqueOrThrow({ where: { id: res.locals.user.id }, select: { marketingConsentAt: true, marketingConsentRevokedAt: true, pushSubscriptions: { select: { id: true } } } });
@@ -479,7 +486,7 @@ app.get('/api/v1/services', authenticated(), async function (req, res) {
   const zoneId = typeof req.query.zoneId === 'string' ? req.query.zoneId : undefined;
   const vehicleType = z.nativeEnum(VehicleType).safeParse(req.query.vehicleType);
   if (!vehicleType.success) return res.status(400).json({ error: 'vehicleType must be CAR or BIKE.' });
-  const items = await db.zonePrice.findMany({ where: { ...(zoneId ? { zoneId } : pilotZoneWhere), vehicleType: vehicleType.data, zone: { isActive: true, ...pilotZoneWhere }, service: { isActive: true } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } });
+  const items = await db.zonePrice.findMany({ where: { ...(zoneId ? { zoneId } : activeZoneWhere), vehicleType: vehicleType.data, zone: { isActive: true, ...activeZoneWhere }, service: { isActive: true } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } });
   res.json(items.map(function (p) { return { id: p.serviceId, name: p.service.name, vehicleType: p.vehicleType, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name }; }));
 });
 app.get('/api/v1/vehicles', customer, async function (_req, res) { res.json(await db.vehicle.findMany({ where: { customerId: res.locals.user.id } })); });
@@ -495,7 +502,7 @@ function zoneContainsPoint(zone: { centerLat: number | null; centerLng: number |
   return polygons.some(function (rings) { return !!rings[0] && contains(lng, lat, rings[0]) && !rings.slice(1).some(function (hole) { return contains(lng, lat, hole); }); });
 }
 async function zoneAt(lng: number, lat: number) {
-  const zones = await db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, orderBy: { name: 'asc' } });
+  const zones = await db.zone.findMany({ where: { isActive: true, ...activeZoneWhere }, orderBy: { name: 'asc' } });
   const matches = zones.filter(function (zone) {
     if (zone.centerLat != null && zone.centerLng != null && zone.radiusKm != null) return distanceKm(lat, lng, zone.centerLat, zone.centerLng) <= zone.radiusKm;
     const g = zone.polygon as any; const polygons: number[][][][] = g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : [];
@@ -539,7 +546,7 @@ const bookingInput = z.object({
 app.get('/api/v1/bookings', customer, async function (req, res) { const status = typeof req.query.status === 'string' && Object.values(BookingStatus).includes(req.query.status as BookingStatus) ? req.query.status as BookingStatus : undefined; const rows = await db.booking.findMany({ where: { customerId: res.locals.user.id, ...(status ? { status } : {}) }, include: { service: true, vehicle: true, vehicleItems: { include: { vehicle: true } }, worker: { include: { user: true } }, zone: true, rating: true, photos: { select: { id: true, type: true, status: true } } }, orderBy: { createdAt: 'desc' }, take: 100 }); res.setHeader('Cache-Control', 'private, no-store'); res.json(rows.map(function (b) { return { id: b.id, status: b.status, service: b.service.name, vehicle: b.vehicleItems.length ? b.vehicleItems.map(function (item) { return item.vehicle.model + ' · ' + item.vehicle.number; }).join(', ') : b.vehicle ? b.vehicle.model + ' · ' + b.vehicle.number : b.solarPropertyType + ' solar panels', couponDiscount: b.couponDiscount, solarPropertyType: b.solarPropertyType, solarPanelCount: b.solarPanelCount, solarRoofType: b.solarRoofType, solarAccessNotes: b.solarAccessNotes, quoteNote: b.quoteNote, scheduledAt: b.scheduledAt, price: b.price, worker: b.worker?.user.name || null, zone: b.zone.name, photos: b.photos, rating: b.rating }; })); });
 app.post('/api/v1/bookings', customer, async function (req, res) {
   const p = bookingInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Enter your name, valid mobile number, service address, and requested service details.' }); const userId = res.locals.user.id;
-  if (production && !pilotZoneIds.length) return res.status(503).json({ error: 'Bookings are closed until the approved 42 Mouza map zones are configured.' });
+  if (production && !activeZoneIds.length) return res.status(503).json({ error: 'Bookings are closed until approved service zones are configured.' });
   const phoneOwner = await db.user.findUnique({ where: { phone: p.data.phone }, select: { id: true } });
   if (phoneOwner && phoneOwner.id !== userId) return res.status(409).json({ error: 'This mobile number is linked to another account. Sign in with that account or contact support.' });
   const service = await db.service.findFirst({ where: { id: p.data.serviceId, isActive: true } });
@@ -553,7 +560,7 @@ app.post('/api/v1/bookings', customer, async function (req, res) {
     if (zone) address = await db.address.create({ data: { ...p.data.newAddress, customerId: userId, zoneId: zone.id }, include: { zone: true } });
   }
   if (!address?.zoneId) return res.status(422).json({ error: 'Choose an address inside a mapped QuickWashHub service zone.' });
-  if (pilotZoneIds.length && !pilotZoneIds.includes(address.zoneId)) return res.status(422).json({ error: 'This beta currently serves Cuttack 42 Mouza only.' });
+  if (activeZoneIds.length && !activeZoneIds.includes(address.zoneId)) return res.status(422).json({ error: 'This address is outside the currently enabled service areas.' });
   if (new Date(p.data.scheduledAt).getTime() < Date.now() + 60 * 60 * 1000) return res.status(400).json({ error: 'Choose a time at least one hour from now.' });
   if (service.category === 'VEHICLE' && !vehicle && p.data.newVehicle) vehicle = await db.vehicle.create({ data: { ...p.data.newVehicle, customerId: userId } });
   if (service.category === 'VEHICLE' && !vehicle && !p.data.vehicleItems) return res.status(400).json({ error: 'Choose a saved vehicle matching this service, or add its model and registration.' });
@@ -609,7 +616,7 @@ app.post('/api/v1/bookings/:id/payment-order', customer, async function (req, re
   if (!b) return res.status(404).json({ error: 'Booking not found.' });
   if (!([BookingStatus.CREATED, BookingStatus.QUOTE_PROVIDED, BookingStatus.PAYMENT_PENDING] as BookingStatus[]).includes(b.status)) return res.status(409).json({ error: 'Booking must be quoted or ready for payment before checkout.' });
   if (b.price < 100) return res.status(409).json({ error: 'The final quote is not available yet.' });
-  if (!cashfreeId || !cashfreeSecret || (production && !publicPaymentsReady)) return res.status(503).json({ error: 'Paid bookings are not open yet. Cashfree, Easy Split, 42 Mouza, and legal launch gates must be completed.' });
+  if (!cashfreeId || !cashfreeSecret || (production && !publicPaymentsReady)) return res.status(503).json({ error: 'Paid bookings are not open yet. Payment and legal launch requirements must be completed.' });
   try {
     const previous = await db.payment.findUnique({ where: { bookingId: b.id } });
     if (previous?.method === 'cashfree' && previous.status === PaymentStatus.PENDING && previous.gatewayRef && previous.paymentSessionId) return res.json({ orderId: previous.gatewayRef, paymentSessionId: previous.paymentSessionId, mode: process.env.CASHFREE_ENV === 'production' ? 'production' : 'sandbox' });
@@ -813,7 +820,7 @@ app.get('/api/v1/worker/jobs', worker, async function (_req, res) {
   const profile = await db.worker.findUnique({ where: { userId: res.locals.user.id }, include: { zones: true } });
   if (!profile || profile.kycStatus !== KycStatus.APPROVED) return res.status(403).json({ error: 'Worker account is not approved.' });
   if (!profile.isOnline) return res.json([]);
-  const zones = await db.zone.findMany({ where: { isActive: true, ...pilotZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true, polygon: true } });
+  const zones = await db.zone.findMany({ where: { isActive: true, ...activeZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true, polygon: true } });
   const zoneIds = new Set(profile.zones.map(function (x) { return x.zoneId; }));
   if (profile.currentLat != null && profile.currentLng != null) zones.filter(function (zone) { return zoneContainsPoint(zone, profile.currentLat!, profile.currentLng!); }).forEach(function (zone) { zoneIds.add(zone.id); });
   const categories = profile.solarQualified ? ['VEHICLE', 'SOLAR'] : ['VEHICLE'];
@@ -1030,7 +1037,7 @@ app.post('/api/v1/admin/campaigns', admin, async function (req, res) { const p =
 app.patch('/api/v1/admin/campaigns/:id', admin, async function (req, res) { const p = campaignInput.partial().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Campaign update is invalid.' }); const data = { ...p.data, ...(p.data.startDate ? { startDate: new Date(p.data.startDate) } : {}), ...(p.data.endDate ? { endDate: new Date(p.data.endDate) } : {}) }; const current = await db.campaign.findUnique({ where: { id: String(req.params.id) } }); if (!current) return res.status(404).json({ error: 'Campaign not found.' }); const updated = await db.campaign.update({ where: { id: current.id }, data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPDATE', entity: 'Campaign', entityId: current.id, before: { name: current.name, startDate: current.startDate, endDate: current.endDate }, after: p.data } }); res.json(updated); });
 app.get('/api/v1/admin/reports/summary', admin, async function (req, res) { const from = typeof req.query.from === 'string' ? new Date(req.query.from) : new Date(Date.now() - 30 * 86400000); const to = typeof req.query.to === 'string' ? new Date(req.query.to) : new Date(); if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || to < from) return res.status(400).json({ error: 'Date range is invalid.' }); const rows = await db.booking.groupBy({ by: ['status'], where: { createdAt: { gte: from, lte: to } }, _count: { _all: true }, _sum: { price: true } }); res.json({ from, to, bookings: rows.reduce(function (n, x) { return n + x._count._all; }, 0), revenuePaise: rows.filter(function (x) { return x.status !== BookingStatus.CANCELLED && x.status !== BookingStatus.REFUNDED; }).reduce(function (n, x) { return n + (x._sum.price || 0); }, 0), byStatus: rows.map(function (x) { return { status: x.status, count: x._count._all, amountPaise: x._sum.price || 0 }; }) }); });
 
-app.get('/api/v1/admin/zones/config', admin, function (_req, res) { res.setHeader('Cache-Control', 'private, no-store'); res.json({ googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null }); });
+app.get('/api/v1/admin/zones/config', admin, function (_req, res) { res.setHeader('Cache-Control', 'private, no-store'); res.json({ googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null, mapDefaultCenter, mapDefaultZoom, mapAutocompleteRadiusKm, mapCountryCode, serviceAreaLabel }); });
 app.get('/api/v1/admin/zones', admin, async function (_req, res) { res.json(await db.zone.findMany({ include: { prices: { include: { service: true } }, workers: { include: { worker: { include: { user: { select: { id: true, email: true, name: true } } } } } } }, orderBy: { name: 'asc' } })); });
 const zoneInput = z.object({ name: z.string().trim().min(2).max(100), baseCommissionPct: z.number().min(0).max(100), couponMinimumContributionPct: z.number().min(0).max(20).default(1), centerLat: z.number().min(-90).max(90), centerLng: z.number().min(-180).max(180), radiusKm: z.number().min(0.25).max(30) }).strict();
 app.post('/api/v1/admin/zones', admin, async function (req, res) { const p = zoneInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a map center and radius between 0.25 and 30 km.' }); const zone = await db.zone.create({ data: p.data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'CREATE', entity: 'Zone', entityId: zone.id, after: p.data } }); res.status(201).json(zone); });

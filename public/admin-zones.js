@@ -268,14 +268,14 @@ async function loadWorkersPage() {
 function zonesPage() {
   return heading('Service zones', 'Place a center on the map and set its coverage radius.') +
     panel('Create or edit zone', '<form id="zone-form" class="zone-editor">' +
-      '<label class="field"><span>Zone name</span><input name="name" placeholder="Cuttack 42 Mouza" required maxlength="100"></label>' +
+      '<label class="field"><span>Zone or neighborhood name</span><input name="name" placeholder="Enter an area name" required maxlength="100"></label>' +
       '<label class="field"><span>Base commission (%)</span><input name="baseCommissionPct" type="number" min="0" max="100" step="0.1" value="20" required></label>' +
       '<label class="field"><span>Minimum contribution after coupon (%)</span><input name="couponMinimumContributionPct" type="number" min="0" max="20" step="0.1" value="1" required><small class="form-help">Coupons stop at the zone margin left after partner payout and payment fees.</small></label>' +
       '<div class="zone-map-toolbar"><label class="field"><span>Coverage radius (km)</span><input name="radiusKm" id="zone-radius" type="number" min="0.25" max="30" step="0.25" value="3" required></label>' +
       '<button class="secondary" id="zone-use-location" type="button">◎ Use my location</button><span id="zone-center-status" class="fine">Click the map to place the zone center.</span></div>' +
       '<div id="admin-zone-map" role="application" aria-label="Choose a circular service zone on the map"></div>' +
       '<input type="hidden" name="centerLat"><input type="hidden" name="centerLng">' +
-      '<p class="form-help">Check that the circle stays inside the 42 Mouza beta area before activating this zone.</p>' +
+      '<p class="form-help">Place the zone over the area where your team can reliably provide the service. Only enabled zones are bookable.</p>' +
       '<div class="formrow"><button class="primary" id="zone-save">Create zone</button><button class="secondary hidden" id="zone-cancel-edit" type="button">Cancel edit</button></div>' +
       '</form>') + '<section id="zones-state">Loading zones…</section>';
 }
@@ -284,6 +284,7 @@ async function loadZonesPage() {
   const [zones, workers, config] = await Promise.all([
     api('/api/v1/admin/zones'), api('/api/v1/admin/workers'), api('/api/v1/admin/zones/config')
   ]);
+  const defaultCenter = config.mapDefaultCenter || { lat: 20.4625, lng: 85.883 };
   const mapZones = zones.filter(z => z.centerLat != null && z.centerLng != null && Number.isFinite(Number(z.centerLat)) && Number.isFinite(Number(z.centerLng)) && Number(z.radiusKm) > 0);
   const overlaps = [];
   for (let i = 0; i < mapZones.length; i++) for (let j = i + 1; j < mapZones.length; j++) {
@@ -320,7 +321,7 @@ async function loadZonesPage() {
     document.querySelector('#zone-save').textContent = 'Create zone';
     document.querySelector('#zone-cancel-edit').classList.add('hidden');
     document.querySelector('#zone-center-status').textContent = 'Click the map to place the zone center.';
-    setAdminZoneCenter(20.4625, 85.883, false);
+    setAdminZoneCenter(defaultCenter.lat, defaultCenter.lng, false);
   };
   form.addEventListener('submit', async event => {
     event.preventDefault(); event.stopImmediatePropagation();
@@ -341,7 +342,7 @@ async function loadZonesPage() {
     form.elements.baseCommissionPct.value = String(zone.baseCommissionPct); form.elements.couponMinimumContributionPct.value = String(zone.couponMinimumContributionPct ?? 1); radius.value = String(zone.radiusKm || 3);
     document.querySelector('#zone-save').textContent = 'Save zone';
     document.querySelector('#zone-cancel-edit').classList.remove('hidden');
-    setAdminZoneCenter(zone.centerLat ?? 20.4625, zone.centerLng ?? 85.883, true);
+    setAdminZoneCenter(zone.centerLat ?? defaultCenter.lat, zone.centerLng ?? defaultCenter.lng, true);
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   document.querySelectorAll('[data-zone-toggle]').forEach(button => button.onclick = async () => {
@@ -358,7 +359,7 @@ async function loadZonesPage() {
   try {
     await loadAdminZoneMap(config.googleMapsApiKey);
     const element = document.querySelector('#admin-zone-map'); if (!element) return;
-    adminZoneMap = new google.maps.Map(element, { center: { lat: 20.4625, lng: 85.883 }, zoom: 13, mapTypeControl: false, streetViewControl: false, fullscreenControl: false });
+    adminZoneMap = new google.maps.Map(element, { center: defaultCenter, zoom: config.mapDefaultZoom || 12, mapTypeControl: false, streetViewControl: false, fullscreenControl: false });
     adminZoneMarker = new google.maps.Marker({ map: adminZoneMap, draggable: true, title: 'Zone center' });
     adminZoneCircle = new google.maps.Circle({ map: adminZoneMap, strokeColor: '#176b4b', strokeOpacity: .9, strokeWeight: 2, fillColor: '#176b4b', fillOpacity: .14 });
     adminZoneMap.addListener('click', e => e.latLng && setAdminZoneCenter(e.latLng.lat(), e.latLng.lng(), true));
