@@ -111,8 +111,6 @@ customerView = function () {
   }).join('');
   return heading('Hello, ' + (me.name || 'there'), 'Book a convenient car, bike, or solar-panel wash.', '<button class="primary" data-book>Book a wash →</button>') +
     '<section class="simple-dashboard"><div class="simple-main">' + panel('Your next booking', next ? bookingRows([next]) : '<div class="empty-state"><b>No booking yet</b>Choose a service and book in a few steps.</div>') +
-    '<div class="quick-links"><button class="secondary" data-nav="Vehicles">My vehicles</button><button class="secondary" data-nav="Addresses">My addresses</button><button class="secondary" data-nav="Support">Get help</button></div>' +
-    (bookings.length > 1 ? panel('Recent bookings', bookingRows(bookings.filter(b => b !== next).slice(0, 3))) : '') +
     '</div><aside class="simple-services">' + panel('Services in your area', cards || '<p class="fine">Services are being set up for your zone.</p>') +
     '<article class="customer-service-card home-service-card"><div class="customer-service-top"><span class="customer-service-icon" aria-hidden="true">⌂</span><span class="customer-service-kind">COMING LATER</span></div><h4>Home Wash</h4><p class="customer-service-detail">We are preparing this service for your area.</p><div class="customer-service-bottom"><strong>Not available yet</strong></div></article></aside></section>';
 };
