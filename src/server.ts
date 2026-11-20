@@ -32,6 +32,36 @@ const db = new PrismaClient({ adapter: new PrismaMariaDb({
   connectionLimit: Math.max(2, Number(process.env.DB_POOL_MAX) || 10),
   connectTimeout: 5000,
 }) });
+const authSessionLookupInFlight = new Map<string, Promise<unknown>>();
+// Shared catalog/zone data is not user-specific. Keep it only in this process,
+// never in a shared HTTP cache; customer addresses and vehicles remain uncached.
+function loadCustomerBootstrapSharedData() {
+  return Promise.all([
+    db.zonePrice.findMany({ where: { zone: { isActive: true, ...activeZoneWhere }, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
+    db.service.findMany({ where: { category: { in: ['SOLAR', 'HOME'] } } }),
+    db.zone.findMany({ where: { isActive: true, ...activeZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true, polygon: true } })
+  ]).then(function ([prices, additionalServices, zones]) { return { prices, additionalServices, zones }; });
+}
+type CustomerBootstrapSharedData = Awaited<ReturnType<typeof loadCustomerBootstrapSharedData>>;
+let customerBootstrapSharedCache: { expiresAt: number; value: CustomerBootstrapSharedData } | null = null;
+let customerBootstrapSharedLoad: Promise<CustomerBootstrapSharedData> | null = null;
+let customerBootstrapSharedVersion = 0;
+async function getCustomerBootstrapSharedData() {
+  if (customerBootstrapSharedCache && customerBootstrapSharedCache.expiresAt > Date.now()) return customerBootstrapSharedCache.value;
+  if (customerBootstrapSharedLoad) return customerBootstrapSharedLoad;
+  const version = customerBootstrapSharedVersion;
+  const pending = loadCustomerBootstrapSharedData().then(function (value) {
+    if (version === customerBootstrapSharedVersion) customerBootstrapSharedCache = { value, expiresAt: Date.now() + 20_000 };
+    return value;
+  }).finally(function () { if (customerBootstrapSharedLoad === pending) customerBootstrapSharedLoad = null; });
+  customerBootstrapSharedLoad = pending;
+  return pending;
+}
+function invalidateCustomerBootstrapSharedCache() {
+  customerBootstrapSharedVersion++;
+  customerBootstrapSharedCache = null;
+  customerBootstrapSharedLoad = null;
+}
 const port = Number(process.env.PORT || 4000);
 const production = process.env.NODE_ENV === 'production';
 const sessionCookie = 'quickwashhub_session';
@@ -98,7 +128,14 @@ function authenticated(roles: Role[] = []) {
       const token = getCookie(req);
       if (!token) return res.status(401).json({ error: 'Please sign in.' });
       const claims = decodeToken(token);
-      const session = await db.authSession.findUnique({ where: { id: claims.sid }, include: { user: true } });
+      let sessionLookup = authSessionLookupInFlight.get(claims.sid);
+      if (!sessionLookup) {
+        sessionLookup = db.authSession.findUnique({ where: { id: claims.sid }, include: { user: true } });
+        authSessionLookupInFlight.set(claims.sid, sessionLookup);
+      }
+      let session: (Awaited<ReturnType<typeof db.authSession.findUnique>> & { user: { isActive: boolean; role: Role; adminMfaSecretEnc?: string | null } }) | null;
+      try { session = await sessionLookup as typeof session; }
+      finally { if (authSessionLookupInFlight.get(claims.sid) === sessionLookup) authSessionLookupInFlight.delete(claims.sid); }
       if (!session || session.userId !== claims.sub || session.expiresAt < new Date() || !session.user.isActive) return res.status(401).json({ error: 'Session expired. Sign in again.' });
       if (roles.length && !roles.includes(session.user.role)) return res.status(403).json({ error: 'Not allowed for this account.' });
       res.locals.user = session.user;
@@ -431,13 +468,12 @@ app.get('/api/v1/me', authenticated(), async function (_req, res) {
 });
 app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_req, res) {
   const userId = res.locals.user.id;
-  const [vehicles, addresses, prices, additionalServices, zones] = await Promise.all([
+  const [vehicles, addresses, shared] = await Promise.all([
     db.vehicle.findMany({ where: { customerId: userId }, orderBy: { model: 'asc' } }),
     db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
-    db.zonePrice.findMany({ where: { zone: { isActive: true, ...activeZoneWhere }, service: { isActive: true, category: 'VEHICLE' } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } }),
-    db.service.findMany({ where: { category: { in: ['SOLAR', 'HOME'] } } }),
-    db.zone.findMany({ where: { isActive: true, ...activeZoneWhere }, select: { id: true, name: true, centerLat: true, centerLng: true, radiusKm: true, polygon: true } })
+    getCustomerBootstrapSharedData()
   ]);
+  const { prices, additionalServices, zones } = shared;
   const solarServices = additionalServices.filter(function (service) { return service.category === 'SOLAR' && service.isActive; });
   const homeServices = additionalServices.filter(function (service) { return service.category === 'HOME'; });
   res.setHeader('Cache-Control', 'private, no-store');
@@ -1041,19 +1077,20 @@ app.get('/api/v1/admin/reports/summary', admin, async function (req, res) { cons
 app.get('/api/v1/admin/zones/config', admin, function (_req, res) { res.setHeader('Cache-Control', 'private, no-store'); res.json({ googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null, mapDefaultCenter, mapDefaultZoom, mapAutocompleteRadiusKm, mapCountryCode, serviceAreaLabel }); });
 app.get('/api/v1/admin/zones', admin, async function (_req, res) { res.json(await db.zone.findMany({ include: { prices: { include: { service: true } }, workers: { include: { worker: { include: { user: { select: { id: true, email: true, name: true } } } } } } }, orderBy: { name: 'asc' } })); });
 const zoneInput = z.object({ name: z.string().trim().min(2).max(100), baseCommissionPct: z.number().min(0).max(100), couponMinimumContributionPct: z.number().min(0).max(20).default(1), centerLat: z.number().min(-90).max(90), centerLng: z.number().min(-180).max(180), radiusKm: z.number().min(0.25).max(30) }).strict();
-app.post('/api/v1/admin/zones', admin, async function (req, res) { const p = zoneInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a map center and radius between 0.25 and 30 km.' }); const zone = await db.zone.create({ data: p.data }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'CREATE', entity: 'Zone', entityId: zone.id, after: p.data } }); res.status(201).json(zone); });
+app.post('/api/v1/admin/zones', admin, async function (req, res) { const p = zoneInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a map center and radius between 0.25 and 30 km.' }); const zone = await db.zone.create({ data: p.data }); invalidateCustomerBootstrapSharedCache(); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'CREATE', entity: 'Zone', entityId: zone.id, after: p.data } }); res.status(201).json(zone); });
 app.patch('/api/v1/admin/zones/:id', admin, async function (req, res) {
   const p = z.object({ name: z.string().trim().min(2).max(100).optional(), baseCommissionPct: z.number().min(0).max(100).optional(), couponMinimumContributionPct: z.number().min(0).max(20).optional(), centerLat: z.number().min(-90).max(90).optional(), centerLng: z.number().min(-180).max(180).optional(), radiusKm: z.number().min(0.25).max(30).optional(), isActive: z.boolean().optional() }).strict().safeParse(req.body);
   if (!p.success || (p.success && (p.data.centerLat !== undefined || p.data.centerLng !== undefined || p.data.radiusKm !== undefined) && (p.data.centerLat === undefined || p.data.centerLng === undefined || p.data.radiusKm === undefined))) return res.status(400).json({ error: 'Provide the map center and radius together.' });
   const before = await db.zone.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Zone not found.' });
   const zone = await db.zone.update({ where: { id: before.id }, data: p.data });
+  invalidateCustomerBootstrapSharedCache();
   await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPDATE', entity: 'Zone', entityId: zone.id, before: { name: before.name, isActive: before.isActive, baseCommissionPct: before.baseCommissionPct, centerLat: before.centerLat, centerLng: before.centerLng, radiusKm: before.radiusKm }, after: p.data } }); res.json(zone);
 });
 
 app.get('/api/v1/admin/services', admin, async function (_req, res) { res.json(await db.service.findMany({ include: { prices: { include: { zone: true } } }, orderBy: { name: 'asc' } })); });
-app.patch('/api/v1/admin/services/:id', admin, async function (req, res) { const p = z.object({ isActive: z.boolean() }).strict().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Provide a service activation setting.' }); const before = await db.service.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Service not found.' }); const active = before.category === 'HOME' && process.env.HOME_WASH_ENABLED !== 'true' ? false : p.data.isActive; const service = await db.service.update({ where: { id: before.id }, data: { isActive: active } }); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'SET_SERVICE_ACTIVE', entity: 'Service', entityId: before.id, before: { isActive: before.isActive }, after: { isActive: active } } }); res.json(service); });
+app.patch('/api/v1/admin/services/:id', admin, async function (req, res) { const p = z.object({ isActive: z.boolean() }).strict().safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Provide a service activation setting.' }); const before = await db.service.findUnique({ where: { id: String(req.params.id) } }); if (!before) return res.status(404).json({ error: 'Service not found.' }); const active = before.category === 'HOME' && process.env.HOME_WASH_ENABLED !== 'true' ? false : p.data.isActive; const service = await db.service.update({ where: { id: before.id }, data: { isActive: active } }); invalidateCustomerBootstrapSharedCache(); await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'SET_SERVICE_ACTIVE', entity: 'Service', entityId: before.id, before: { isActive: before.isActive }, after: { isActive: active } } }); res.json(service); });
 const serviceInput = z.object({ name: z.string().trim().min(2).max(100), category: z.enum(['VEHICLE', 'SOLAR', 'HOME']).default('VEHICLE'), vehicleType: z.nativeEnum(VehicleType).optional(), durationMin: z.number().int().min(5).max(600), isActive: z.boolean().optional() }).strict().refine(function (x) { return x.category !== 'VEHICLE' || !!x.vehicleType; }, { message: 'Vehicle type required for vehicle services.' });
-app.post('/api/v1/admin/services', admin, async function (req, res) { const p = serviceInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a category and the matching details for this service.' }); const sameType = await db.service.findMany({ where: { category: p.data.category, vehicleType: p.data.vehicleType ?? null }, select: { name: true } }); const duplicate = sameType.some(function (service) { return service.name.trim().toLocaleLowerCase().replace(/\s+/g, ' ') === p.data.name.trim().toLocaleLowerCase().replace(/\s+/g, ' '); }); if (duplicate) return res.status(409).json({ error: 'A service with this name, category, and vehicle type already exists. Review the existing service in the catalogue.' }); const data = { ...p.data, isActive: p.data.category === 'HOME' ? p.data.isActive === true && process.env.HOME_WASH_ENABLED === 'true' : p.data.isActive ?? true }; res.status(201).json(await db.service.create({ data })); });
+app.post('/api/v1/admin/services', admin, async function (req, res) { const p = serviceInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Choose a category and the matching details for this service.' }); const sameType = await db.service.findMany({ where: { category: p.data.category, vehicleType: p.data.vehicleType ?? null }, select: { name: true } }); const duplicate = sameType.some(function (service) { return service.name.trim().toLocaleLowerCase().replace(/\s+/g, ' ') === p.data.name.trim().toLocaleLowerCase().replace(/\s+/g, ' '); }); if (duplicate) return res.status(409).json({ error: 'A service with this name, category, and vehicle type already exists. Review the existing service in the catalogue.' }); const data = { ...p.data, isActive: p.data.category === 'HOME' ? p.data.isActive === true && process.env.HOME_WASH_ENABLED === 'true' : p.data.isActive ?? true }; const service = await db.service.create({ data }); invalidateCustomerBootstrapSharedCache(); res.status(201).json(service); });
 app.put('/api/v1/admin/zones/:zoneId/prices/:serviceId', admin, async function (req, res) {
   const p = z.object({ price: z.number().int().positive().max(100000000), vehicleType: z.nativeEnum(VehicleType), festivalMultiplier: z.number().min(0.1).max(10).default(1) }).strict().safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'Price must be a positive amount in paise.' });
@@ -1062,6 +1099,7 @@ app.put('/api/v1/admin/zones/:zoneId/prices/:serviceId', admin, async function (
   const where = { zoneId: String(req.params.zoneId), serviceId: service.id, vehicleType: p.data.vehicleType, solarPanelTier: null };
   const existing = await db.zonePrice.findFirst({ where });
   const result = existing ? await db.zonePrice.update({ where: { id: existing.id }, data: { ...p.data } }) : await db.zonePrice.create({ data: { ...where, ...p.data } });
+  invalidateCustomerBootstrapSharedCache();
   await db.auditLog.create({ data: { adminId: res.locals.user.id, action: 'UPSERT_PRICE', entity: 'ZonePrice', entityId: result.id, after: p.data } }); res.json(result);
 });
 
