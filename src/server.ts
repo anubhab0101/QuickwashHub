@@ -64,7 +64,7 @@ const pushReady = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_K
 if (pushReady) setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@quickwashhub.com', process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!);
 
 app.disable('x-powered-by');
-app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
+app.set('trust proxy', process.env.TRUST_PROXY === 'false' ? false : (production || process.env.TRUST_PROXY === 'true') ? 1 : false);
 app.use(helmet({ crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://sdk.cashfree.com', 'https://accounts.google.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com'], styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'], fontSrc: ["'self'", 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:', storageOrigin, 'https://*.googleusercontent.com', 'https://*.googleapis.com', 'https://*.gstatic.com'].filter(Boolean), connectSrc: ["'self'", 'https://api.cashfree.com', 'https://sandbox.cashfree.com', 'https://accounts.google.com', 'https://oauth2.googleapis.com', 'https://maps.googleapis.com', 'https://maps.gstatic.com', storageOrigin].filter(Boolean), frameSrc: ["'self'", 'https://sdk.cashfree.com', 'https://payments.cashfree.com', 'https://accounts.google.com'], objectSrc: ["'none'"], baseUri: ["'self'"] } } }));
 if (allowedOrigins.length) app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use('/api/v1/payments/razorpay/webhook', express.raw({ type: 'application/json', limit: '2mb' }));
@@ -281,7 +281,8 @@ async function startSession(user: { id: string; email: string | null; phone: str
   const session = await db.authSession.create({ data: { userId: user.id, expiresAt } });
   const token = issueToken({ sub: user.id, sid: session.id, exp: Math.floor(expiresAt.getTime() / 1000) });
   res.cookie(sessionCookie, token, { httpOnly: true, secure: production, sameSite: 'strict', path: '/', maxAge: 8 * 60 * 60 * 1000 });
-  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  const mfa = user.role === Role.ADMIN ? { enabled: !!(user as typeof user & { adminMfaSecretEnc?: string | null }).adminMfaSecretEnc, required: production } : undefined;
+  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role }, ...(mfa ? { mfa } : {}) });
 }
 function mfaChallengeToken(userId: string) { return issueToken({ sub: userId, sid: 'admin-mfa-challenge', exp: Math.floor(Date.now() / 1000) + 300 }); }
 async function finishSignIn(user: { id: string; email: string | null; phone: string | null; name: string | null; role: Role; isActive: boolean; adminMfaSecretEnc?: string | null }, res: Response) {
