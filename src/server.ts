@@ -469,8 +469,8 @@ app.get('/api/v1/me', authenticated(), async function (_req, res) {
 app.get('/api/v1/bootstrap', authenticated([Role.CUSTOMER]), async function (_req, res) {
   const userId = res.locals.user.id;
   const [vehicles, addresses, shared] = await Promise.all([
-    db.vehicle.findMany({ where: { customerId: userId }, orderBy: { model: 'asc' } }),
-    db.address.findMany({ where: { customerId: userId }, include: { zone: true }, orderBy: { label: 'asc' } }),
+    db.vehicle.findMany({ where: { customerId: userId, deletedAt: null }, orderBy: { model: 'asc' } }),
+    db.address.findMany({ where: { customerId: userId, deletedAt: null }, include: { zone: true }, orderBy: { label: 'asc' } }),
     getCustomerBootstrapSharedData()
   ]);
   const { prices, additionalServices, zones } = shared;
@@ -526,18 +526,32 @@ app.get('/api/v1/services', authenticated(), async function (req, res) {
   const items = await db.zonePrice.findMany({ where: { ...(zoneId ? { zoneId } : activeZoneWhere), vehicleType: vehicleType.data, zone: { isActive: true, ...activeZoneWhere }, service: { isActive: true } }, include: { service: true, zone: true }, orderBy: { price: 'asc' } });
   res.json(items.map(function (p) { return { id: p.serviceId, name: p.service.name, vehicleType: p.vehicleType, durationMin: p.service.durationMin, price: p.price, zoneId: p.zoneId, zoneName: p.zone.name }; }));
 });
-app.get('/api/v1/vehicles', customer, async function (_req, res) { res.json(await db.vehicle.findMany({ where: { customerId: res.locals.user.id } })); });
+app.get('/api/v1/vehicles', customer, async function (_req, res) { res.json(await db.vehicle.findMany({ where: { customerId: res.locals.user.id, deletedAt: null } })); });
 const vehicleInput = z.object({ type: z.nativeEnum(VehicleType), model: z.string().trim().min(1).max(80), number: z.string().trim().min(2).max(20).transform(function (x) { return x.toUpperCase(); }) });
-app.post('/api/v1/vehicles', customer, async function (req, res) { const p = vehicleInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Enter valid vehicle details.' }); res.status(201).json(await db.vehicle.create({ data: { ...p.data, customerId: res.locals.user.id } })); });
+function vehicleRegistrationKey(number: string) { return number.replace(/[^a-z0-9]/gi, '').toUpperCase(); }
+async function hasSavedVehicleWithRegistration(customerId: string, number: string) {
+  const wanted = vehicleRegistrationKey(number);
+  const saved = await db.vehicle.findMany({ where: { customerId, deletedAt: null }, select: { number: true } });
+  return saved.some(function (vehicle) { return vehicleRegistrationKey(vehicle.number) === wanted; });
+}
+app.post('/api/v1/vehicles', customer, async function (req, res) {
+  const p = vehicleInput.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Enter valid vehicle details.' });
+  if (await hasSavedVehicleWithRegistration(res.locals.user.id, p.data.number)) return res.status(409).json({ error: 'This registration number is already saved. Delete the duplicate or check the number.' });
+  res.status(201).json(await db.vehicle.create({ data: { ...p.data, customerId: res.locals.user.id } }));
+});
 app.delete('/api/v1/vehicles/:id', customer, async function (req, res) {
-  try {
-    const result = await db.vehicle.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: {} }, bookingItems: { none: {} } } });
-    if (!result.count) return res.status(409).json({ error: 'This vehicle is linked to booking history and cannot be removed.' });
-    res.status(204).end();
-  } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003') return res.status(409).json({ error: 'This vehicle is linked to booking history and cannot be removed.' });
-    throw error;
-  }
+  const customerId = res.locals.user.id, id = String(req.params.id);
+  const vehicle = await db.vehicle.findFirst({ where: { id, customerId, deletedAt: null }, select: { id: true, type: true, model: true } });
+  if (!vehicle) return res.status(404).json({ error: 'Vehicle not found.' });
+  const archived = await db.$transaction(async function (tx) {
+    const result = await tx.vehicle.updateMany({ where: { id, customerId, deletedAt: null }, data: { deletedAt: new Date() } });
+    if (!result.count) return false;
+    await tx.auditLog.create({ data: { adminId: customerId, action: 'CUSTOMER_DELETE_VEHICLE', entity: 'Vehicle', entityId: id, before: { type: vehicle.type, model: vehicle.model } } });
+    return true;
+  });
+  if (!archived) return res.status(404).json({ error: 'Vehicle not found.' });
+  res.status(204).end();
 });
 
 function contains(lng: number, lat: number, ring: number[][]) { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[1] > lat) !== (b[1] > lat) && lng < (b[0] - a[0]) * (lat - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside; } return inside; }
@@ -563,17 +577,20 @@ async function zoneAt(lng: number, lat: number) {
   return matches[0] || null;
 }
 const addressInput = z.object({ label: z.string().trim().min(1).max(50), lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), fullAddress: z.string().trim().min(5).max(300) });
-app.get('/api/v1/addresses', customer, async function (_req, res) { res.json(await db.address.findMany({ where: { customerId: res.locals.user.id }, include: { zone: true } })); });
+app.get('/api/v1/addresses', customer, async function (_req, res) { res.json(await db.address.findMany({ where: { customerId: res.locals.user.id, deletedAt: null }, include: { zone: true } })); });
 app.post('/api/v1/addresses', customer, async function (req, res) { const p = addressInput.safeParse(req.body); if (!p.success) return res.status(400).json({ error: 'Enter a valid address and map location.' }); const zone = await zoneAt(p.data.lng, p.data.lat); if (!zone) return res.status(422).json({ error: 'Service is unavailable at this location.' }); res.status(201).json(await db.address.create({ data: { ...p.data, customerId: res.locals.user.id, zoneId: zone.id }, include: { zone: true } })); });
 app.delete('/api/v1/addresses/:id', customer, async function (req, res) {
-  try {
-    const result = await db.address.deleteMany({ where: { id: String(req.params.id), customerId: res.locals.user.id, bookings: { none: {} } } });
-    if (!result.count) return res.status(409).json({ error: 'This address is linked to booking history and cannot be removed.' });
-    res.status(204).end();
-  } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003') return res.status(409).json({ error: 'This address is linked to booking history and cannot be removed.' });
-    throw error;
-  }
+  const customerId = res.locals.user.id, id = String(req.params.id);
+  const address = await db.address.findFirst({ where: { id, customerId, deletedAt: null }, select: { id: true, label: true } });
+  if (!address) return res.status(404).json({ error: 'Address not found.' });
+  const archived = await db.$transaction(async function (tx) {
+    const result = await tx.address.updateMany({ where: { id, customerId, deletedAt: null }, data: { deletedAt: new Date() } });
+    if (!result.count) return false;
+    await tx.auditLog.create({ data: { adminId: customerId, action: 'CUSTOMER_DELETE_ADDRESS', entity: 'Address', entityId: id, before: { label: address.label } } });
+    return true;
+  });
+  if (!archived) return res.status(404).json({ error: 'Address not found.' });
+  res.status(204).end();
 });
 app.post('/api/v1/support/tickets', customer, async function (req, res) {
   const p = z.object({ bookingId: z.string().optional(), subject: z.string().trim().min(4).max(120), message: z.string().trim().min(10).max(4000) }).strict().safeParse(req.body);
@@ -607,8 +624,9 @@ app.post('/api/v1/bookings', customer, async function (req, res) {
   const service = await db.service.findFirst({ where: { id: p.data.serviceId, isActive: true } });
   if (!service) return res.status(422).json({ error: 'This service is unavailable.' });
   if (service.category === 'HOME' && process.env.HOME_WASH_ENABLED !== 'true') return res.status(422).json({ error: 'Home Wash is not available in this beta yet.' });
-  let vehicle = p.data.vehicleId ? await db.vehicle.findFirst({ where: { id: p.data.vehicleId, customerId: userId } }) : null;
-  let address = p.data.addressId ? await db.address.findFirst({ where: { id: p.data.addressId, customerId: userId, zone: { isActive: true } } }) : null;
+  if (p.data.newVehicle && await hasSavedVehicleWithRegistration(userId, p.data.newVehicle.number)) return res.status(409).json({ error: 'This registration number is already saved. Choose that vehicle or delete the duplicate first.' });
+  let vehicle = p.data.vehicleId ? await db.vehicle.findFirst({ where: { id: p.data.vehicleId, customerId: userId, deletedAt: null } }) : null;
+  let address = p.data.addressId ? await db.address.findFirst({ where: { id: p.data.addressId, customerId: userId, deletedAt: null, zone: { isActive: true } } }) : null;
   if (!vehicle && p.data.newVehicle) vehicle = await db.vehicle.create({ data: { ...p.data.newVehicle, customerId: userId } });
   if (!address && p.data.newAddress) {
     const zone = await zoneAt(p.data.newAddress.lng, p.data.newAddress.lat);
@@ -626,7 +644,7 @@ app.post('/api/v1/bookings', customer, async function (req, res) {
     if (vehicle && !requested.some(function (item) { return item.vehicleId === vehicle!.id; })) requested.unshift({ vehicleId: vehicle.id, serviceId: service.id });
     const uniqueIds = new Set(requested.map(function (item) { return item.vehicleId; }));
     if (requested.length > 5 || uniqueIds.size !== requested.length) return res.status(400).json({ error: 'Choose one to five different vehicles per booking.' });
-    const vehicles = await db.vehicle.findMany({ where: { id: { in: Array.from(uniqueIds) }, customerId: userId } });
+    const vehicles = await db.vehicle.findMany({ where: { id: { in: Array.from(uniqueIds) }, customerId: userId, deletedAt: null } });
     if (vehicles.length !== uniqueIds.size) return res.status(400).json({ error: 'One or more selected vehicles are not in your account.' });
     const vehicleMap = new Map(vehicles.map(function (item) { return [item.id, item]; }));
     for (const item of requested) {

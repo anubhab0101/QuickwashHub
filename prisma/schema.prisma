@@ -151,8 +151,11 @@ model Vehicle {
   type       VehicleType
   model      String
   number     String
+  deletedAt  DateTime?
   bookings   Booking[]
   bookingItems BookingVehicle[]
+
+  @@index([customerId, deletedAt])
 }
 
 model Address {
@@ -164,8 +167,11 @@ model Address {
   lng         Float
   fullAddress String
   zoneId      String?
+  deletedAt   DateTime?
   zone        Zone?     @relation(fields: [zoneId], references: [id])
   bookings    Booking[]
+
+  @@index([customerId, deletedAt])
 }
 
 model Zone {
